@@ -1,0 +1,41 @@
+.private/
+**/__pycache__/
+.DS_Store
+
+# Independent application repository; do not stage an embedded Git repository.
+/mini-assistant/
+
+# Existing local research archive and unrelated workspace material.
+# Import reviewed source/evidence explicitly in a separate change if needed.
+/research/
+/lab/
+/tmp/
+/photo editor/
+
+# Credentials and local configuration; examples contain placeholders only.
+.env
+.env.*
+!.env.example
+config.toml
+secrets/
+.credentials/
+.spotify-credentials
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+
+# Generated artifacts, recordings, network captures, firmware and models.
+target/
+node_modules/
+*.log
+*.pcap
+*.pcapng
+*.wav
+*.mp3
+*.onnx
+*.gguf
+*.img
+*.bin
+*.zip
+*.tar.gz
