@@ -165,16 +165,19 @@
 - `.user_uploaded/` — 11 фотоснимков разобранной платы `YAMINI_MAIN_V6`, чипов и микрофонной решетки
 
 ## 📌 Текущий фокус (Current Focus)
-- Внедрение интерактивного обучения и компиляции кастомных вейквордов (`.rpw`) через встроенный Web UI / REST API.
-- Ожидание включения питания устройства GPT Mini (`10.77.0.111:2222`) и моментальный деплой скомпилированного бинарника Фазы 3.
+- Фазы 0–4 (Cold Boot & NTP Watchdog, Proportional Ducking, Web UI & Telegram Mini App, Wake-Word Custom Wizard, Multi-Provider Voice Architecture) успешно реализованы, скомпилированы, задеплоены и верифицированы на физическом GPT Mini (`10.77.0.111`).
+- Переход к Фазе 5: Deep Research & Telegram Forum Topic Dispatcher.
 
 ## 📋 Статус активных задач
 - [x] Аудит репозитория, аппаратных шин и периферии (`docs/hardware_pins.md`)
 - [x] Защитный контракт архитектуры и инвариантов (`GEMINI.md`)
-- [x] Реализация ядра интерактивного обучения (`mini-assistant/src/wakeword/enrollment.rs`)
-- [x] Реализация REST API для записи/загрузки сэмплов и компиляции модели (`mini-assistant/src/web/mod.rs`)
-- [x] Интеграция визарда и WebAudio микрофона в Control Center (`mini-assistant/src/web/dashboard.html`)
-- [x] Юнит-тестирование модуля enrollment и веб-сервера (`cargo test`: 207 passed, 0 failed, 22 python tests passed)
-- [x] Кросс-компиляция артефакта под ARMv7 musleabihf в Docker (бинарник 3.4 МБ готов)
-- [ ] Ожидание появления питания на GPT Mini (`10.77.0.111`), деплой за 5 секунд (`./scripts/deploy.sh --skip-build --restart`)
-- [ ] Верификация через `verify_deploy.sh` (22/22 PASS)
+- [x] Фаза 0: Защита питания и восстановление RTC/NTP (`power-recovery-and-ntp-watchdog.md`)
+- [x] Фаза 1: Пропорциональный дакинг звука $V_{orig} \times 0.25$ (`proportional-audio-ducking.md`)
+- [x] Фаза 2: Автономный Control Center (Web UI & Telegram Mini App) на порту 8080 (`web-ui-and-control-center.md`)
+- [x] Фаза 3: Интерактивный визард обучения Wake-Word через Web UI (`wake-word-custom-enrollment-ui.md`)
+- [x] Фаза 4: Мультипровайдерная голосовая архитектура Gemini Live + OpenAI ChatGPT Voice (`multi-provider-voice-architecture.md`)
+- [x] Сетевое решение: активация proxy-arp на MikroTik 1 bridge для прозрачного Wi-Fi 6 роуминга
+- [x] Деплой артефакта на физическое устройство GPT Mini (`10.77.0.111:2222`)
+- [x] Верификация на железе через `verify_deploy.sh` (22/22 PASS, zero regressions)
+- [ ] Фаза 5: Deep Research & Telegram Forum Topic Dispatcher (`deep-research-and-telegram-dispatcher.md`)
+- [ ] Фаза 6: Подготовка к публичному релизу на GitHub (`github-release-and-portfolio-readiness.md`)

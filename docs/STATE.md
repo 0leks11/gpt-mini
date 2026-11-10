@@ -1,3 +1,27 @@
+# Уточнение 10.11 (ч. 2) — Мультипровайдер голоса (Gemini + OpenAI ChatGPT Voice), Wake-Word Wizard и деплой на железо
+
+На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) успешно развёрнут и верифицирован полный релиз Фаз 3 и 4 (коммиты `7037384`, `05db852`, бинарник `6c833658...` 3.5 МБ, `verify_deploy.sh` 22/22 PASS):
+
+1. **Фаза 3: Интерактивный визард обучения Wake-Word через Web UI и микрофоны (Внедрено и подтверждено на устройстве):**
+   - Ядро `src/wakeword/enrollment.rs`: Акустический препроцессинг, триммер тишины `trim_enrollment` (отсечка пауз с запасом 80–120 мс), контроль SNR/RMS, защита от клиппинга.
+   - Умная селекция 3..=8 лучших сэмплов для Rustpotter из 25 шагов 4 акустических фаз.
+   - Аппаратная запись через микрофоны Mini (`POST /api/v1/wakeword/sample/record_hw`) и загрузка со смартфона (`POST /api/v1/wakeword/sample/upload`).
+   - Мгновенная подмена ключевого слова в памяти через `InputGate::reload_engine` без перезагрузки процесса и без SSH.
+   - Подтверждено живыми curl-тестами на порту 8080: старт сессии, статус, сбор сэмплов.
+
+2. **Фаза 4: Мультипровайдерная голосовая архитектура (Gemini Live API + OpenAI ChatGPT Voice):**
+   - Внедрена голосовая абстракция и клиент `src/openai/realtime_client.rs` для работы с OpenAI Realtime API (`wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`).
+   - Поддержка аутентификации через Bearer API-key и OAuth токен.
+   - Полная совместимость с аудио-трактом: передача PCM16 16 кГц в облако и приём PCM16 24 кГц напрямую в `mini_pcm_sink`.
+   - Автоматическая трансляция JSON-схем локальных инструментов (Home Assistant, Spotify, погода, громкость, Bluetooth, будильники) в формат OpenAI Function Calling.
+   - В `src/config.rs` и `src/web/` добавлена поддержка выбора активного провайдера (`[assistant] provider = "gemini" | "openai"`) и голоса с горячим применением через Web UI.
+   - В панели управления `dashboard.html` добавлены табы переключения между `✨ Google Gemini Live` и `⚡ OpenAI ChatGPT Voice` с соответствующими сетками голосов (Callirrhoe, Puck, Autonoe, Aoede, Charon, Kore, Fenrir для Gemini; alloy, echo, coral, sage, ash, shimmer, ballad, verse для OpenAI).
+
+3. **Сетевая стабильность и фикс роуминга Wi-Fi:**
+   - На шлюзе MikroTik 1 активирован `arp=proxy-arp` для прозрачного прохождения трафика и ARP между точками доступа Wi-Fi 6 и бесшовного доступа к порту 2222 и 8080 колонки с ноутбука.
+   - В `scripts/deploy.sh` исправлена установка init-скрипта через пайплайн `upload_file`.
+   - Верификация: `verify_deploy.sh` — 22/22 PASS (все тесты пройдены, 0 ошибок).
+
 # Уточнение 10.11 — Эволюция GPT Mini: Автономность, Control Center (Web & Telegram), Proportional Ducking и Custom Wake-Word Wizard
 
 Реализованы и зафиксированы ключевые фазы генерального плана автономности устройства **GPT Mini**:
