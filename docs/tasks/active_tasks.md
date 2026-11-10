@@ -157,16 +157,24 @@
 - `docs/plans/2026-11-10-deep-research-and-telegram-dispatcher.md` — Фоновый Deep Research и диспетчер Telegram
 - `docs/plans/2026-11-10-github-release-and-portfolio-readiness.md` — Подготовка к публичному релизу на GitHub
 
+## 📂 Документы и исследования из сессии `42e704e9-cc29-4736-8571-8b8e4064be25` (Ingested)
+- `CODE_REVIEW_AND_ARCHITECTURE_2026-11-08.md` — Полный код-ревью аудиотракта, акустическое эхо AEC, разрывы сессий Gemini Live
+- `MINI_ASSISTANT_PLAN.md` — Первоначальный пошаговый план миграции с maind на Rust mini-assistant
+- `PROJECT_OVERVIEW.md` — Аппаратный паспорт устройства (Amlogic A113X, DU561, NAND MT29F2G08-A, Linux 4.9.68)
+- `scratch/probe_hw2.c`, `scratch/probe_libasound.c`, `scratch/mini_pcm_source.c` — Диагностические C-утилиты зондирования ALSA
+- `.user_uploaded/` — 11 фотоснимков разобранной платы `YAMINI_MAIN_V6`, чипов и микрофонной решетки
+
 ## 📌 Текущий фокус (Current Focus)
 - Внедрение интерактивного обучения и компиляции кастомных вейквордов (`.rpw`) через встроенный Web UI / REST API.
-- Сборка и деплой на физическое устройство GPT Mini (`10.77.0.111:2222`), верификация через `verify_deploy.sh`.
+- Ожидание включения питания устройства GPT Mini (`10.77.0.111:2222`) и моментальный деплой скомпилированного бинарника Фазы 3.
 
 ## 📋 Статус активных задач
 - [x] Аудит репозитория, аппаратных шин и периферии (`docs/hardware_pins.md`)
 - [x] Защитный контракт архитектуры и инвариантов (`GEMINI.md`)
 - [x] Реализация ядра интерактивного обучения (`mini-assistant/src/wakeword/enrollment.rs`)
 - [x] Реализация REST API для записи/загрузки сэмплов и компиляции модели (`mini-assistant/src/web/mod.rs`)
-- [x] Юнит-тестирование модуля enrollment и веб-сервера (`cargo test`: 207 passed, 0 failed)
-- [ ] Кросс-компиляция артефакта под ARMv7 musleabihf в Docker
-- [ ] Деплой на GPT Mini (`10.77.0.111`), проверка `BUILD_INFO` и `assistant.log`
-- [ ] Верификация через `verify_deploy.sh`
+- [x] Интеграция визарда и WebAudio микрофона в Control Center (`mini-assistant/src/web/dashboard.html`)
+- [x] Юнит-тестирование модуля enrollment и веб-сервера (`cargo test`: 207 passed, 0 failed, 22 python tests passed)
+- [x] Кросс-компиляция артефакта под ARMv7 musleabihf в Docker (бинарник 3.4 МБ готов)
+- [ ] Ожидание появления питания на GPT Mini (`10.77.0.111`), деплой за 5 секунд (`./scripts/deploy.sh --skip-build --restart`)
+- [ ] Верификация через `verify_deploy.sh` (22/22 PASS)
