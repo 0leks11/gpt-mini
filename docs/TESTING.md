@@ -38,12 +38,23 @@ cd mini-assistant
 ./scripts/check.sh
 ```
 
-Это форматирование, clippy и host tests. На момент настройки текущий Rust
-playback запускает внешний `aplay`, без зависимости от ALSA development
-libraries при сборке. Проверять наличие/совместимость helper на Mini отдельно.
+Это форматирование, clippy, Rust tests и Python fake-deployment tests.
+HA HTTP fixtures слушают только loopback временный порт, не реальный API.
+Текущий Rust playback предпочитает внешний `mini_pcm_sink`, затем `aplay`,
+затем Mock. Совместимость и наличие helper на Mini проверяются отдельно;
+успех Mock не является готовностью звука на устройстве. Unit-тесты playback
+пока могут найти системный `aplay`: на таком хосте до изоляции backend нельзя
+объявлять весь suite гарантированно бесшумным. В текущем прогоне macOS
+использовались Mock/специальные fake-renderers без реального звука.
 Host checks на macOS/Linux не подтверждают реальное воспроизведение.
+Диагностические копии используют отдельный `CARGO_TARGET_DIR`. При общем cache
+пакета Cargo может запустить binary другого snapshot; результат с неожиданным
+составом тестов не принимать. Перед принятием baseline гарантировать пересборку
+своего пакета из нужного исходника; dependency cache можно переиспользовать
+отдельно от package artifacts.
 Target-сборка и запуск устройства описываются отдельно в CONTRIBUTING приложения.
 Не запускать `deploy.sh` как тест: это операция с реальным устройством.
+Скриптовые тесты заменяют Docker/SSH/SCP временными fake executables.
 
 ## Исследовательские C/Python-прототипы
 

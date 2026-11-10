@@ -1,0 +1,140 @@
+#!/bin/sh
+# S99zzmini_ssh sorts after S99onboot.sh in rcS's S??* sequence.
+# Use the persistent canonical path, independent of the /data symlink.
+# Optional SSH service for Mini 1. Failure must not interrupt boot.
+# The installer checks ownership/permissions of DIR and all its ancestors.
+# This script does not change firmware, accounts, keys, or directory permissions.
+
+DIR=/bkupgrade/data/opt/mini-ssh
+DAEMON=$DIR/bin/dropbear
+AUTHDIR=$DIR/etc
+HOSTKEY=$AUTHDIR/host_ed25519
+AUTHKEYS=$AUTHDIR/authorized_keys
+PIDFILE=/run/mini-ssh.pid
+LOGFILE=/run/mini-ssh.log
+
+umask 077
+
+read_pid()
+{
+    PID=
+    [ -f "$PIDFILE" ] && [ -r "$PIDFILE" ] || return 1
+    PID=$(cat "$PIDFILE" 2>/dev/null) || return 1
+    # Never allow process-group IDs, shell syntax, or multi-line PID files.
+    case "$PID" in
+        ''|*[!0-9]*|0*|1) return 1 ;;
+    esac
+    [ "${#PID}" -le 10 ] || return 1
+}
+
+pid_matches()
+{
+    # /data may resolve through /bkupgrade/data. Compare canonical paths.
+    [ -x "$DAEMON" ] || return 1
+    EXPECTED_EXE=$(readlink -f "$DAEMON" 2>/dev/null) || return 1
+    [ -n "$EXPECTED_EXE" ] || return 1
+    kill -0 "$1" 2>/dev/null || return 1
+    ACTUAL_EXE=$(readlink "/proc/$1/exe" 2>/dev/null) || return 1
+    [ "$ACTUAL_EXE" = "$EXPECTED_EXE" ]
+}
+
+running()
+{
+    read_pid && pid_matches "$PID"
+}
+
+start()
+{
+    if [ -e "$DIR/disabled" ]; then
+        printf '%s\n' 'mini-ssh: disabled; skipped'
+        return 0
+    fi
+    if [ ! -x "$DAEMON" ] || [ ! -f "$HOSTKEY" ] || [ ! -r "$HOSTKEY" ] ||
+       [ ! -s "$HOSTKEY" ] || [ ! -f "$AUTHKEYS" ] ||
+       [ ! -r "$AUTHKEYS" ] || [ ! -s "$AUTHKEYS" ]; then
+        printf '%s\n' 'mini-ssh: required files unavailable; skipped'
+        return 0
+    fi
+    if ! command -v nohup >/dev/null 2>&1 ||
+       ! command -v readlink >/dev/null 2>&1; then
+        printf '%s\n' 'mini-ssh: required utilities unavailable; skipped'
+        return 0
+    fi
+    if running; then
+        printf 'mini-ssh: already running (pid %s)\n' "$PID"
+        return 0
+    fi
+    # Preflight only our RAM files; never create directories on the data volume.
+    if ! (: >> "$LOGFILE") 2>/dev/null || ! (: > "$PIDFILE") 2>/dev/null; then
+        printf '%s\n' 'mini-ssh: RAM runtime files unavailable; skipped'
+        return 0
+    fi
+    # Inherit SIGHUP immunity before forking: a legacy ADB PTY may close
+    # before the nohup child has had time to install its own handler.
+    # This is a standalone init-script process, not a sourced rcS fragment.
+    trap '' HUP
+    nohup "$DAEMON" -F -E -s -g -j -k -p 2222 \
+        -P "$PIDFILE" -r "$HOSTKEY" -D "$AUTHDIR" \
+        </dev/null >>"$LOGFILE" 2>&1 &
+    STARTED_PID=$!
+    if ! printf '%s\n' "$STARTED_PID" > "$PIDFILE"; then
+        # A failed PID write must not stop boot. Signal only our verified child.
+        if pid_matches "$STARTED_PID"; then
+            kill -TERM "$STARTED_PID" 2>/dev/null || :
+        fi
+        printf '%s\n' 'mini-ssh: could not record pid; inspect RAM log'
+        return 0
+    fi
+    printf 'mini-ssh: launch requested (pid %s); use status to verify\n' "$STARTED_PID"
+    return 0
+}
+
+stop()
+{
+    if ! running; then
+        printf '%s\n' 'mini-ssh: no matching process; nothing signalled'
+        return 0
+    fi
+    STOP_PID=$PID
+    # Recheck immediately before signalling; never trust a PID file alone.
+    if ! pid_matches "$STOP_PID"; then
+        printf '%s\n' 'mini-ssh: process changed; nothing signalled'
+        return 0
+    fi
+    if kill -TERM "$STOP_PID" 2>/dev/null; then
+        # Keep the PID until the daemon exits. A stale PID is ignored on start.
+        printf 'mini-ssh: termination requested (pid %s)\n' "$STOP_PID"
+        return 0
+    fi
+    printf '%s\n' 'mini-ssh: could not signal matching process'
+    return 1
+}
+
+status()
+{
+    if running; then
+        printf 'mini-ssh: running (pid %s)\n' "$PID"
+        return 0
+    fi
+    printf '%s\n' 'mini-ssh: no matching process'
+    return 3
+}
+
+case "${1:-start}" in
+    start) start ;;
+    stop) stop ;;
+    status) status ;;
+    restart)
+        stop || exit 1
+        # stop is deliberately nonblocking: do not launch over a live daemon.
+        if running; then
+            printf '%s\n' 'mini-ssh: still stopping; run start after exit'
+            exit 1
+        fi
+        start
+        ;;
+    *)
+        printf 'Usage: %s {start|stop|status|restart}\n' "$0" >&2
+        exit 2
+        ;;
+esac
