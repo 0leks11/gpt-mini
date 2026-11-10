@@ -24,6 +24,10 @@ secrets/
 *.pem
 id_rsa*
 id_ed25519*
+scripts/spotify_auth_local.py
+.tmp-soloist/
+omp-telegram-collab/
+tg agent/
 
 # Generated artifacts, recordings, network captures, firmware and models.
 target/
