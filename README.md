@@ -26,11 +26,13 @@
 
 ## Архитектура и структура репозитория
 
-Проект состоит из двух уровней:
+Проект организован в виде двух независимых уровней:
+- **`gpt-mini`** (текущий репозиторий) — системная архитектура, документация, схемы, распиновки и регламенты деплоя.
+- **[`mini-assistant`](https://github.com/0leks11/mini-assistant)** — исходный код встраиваемого Rust-демона, юнит-тесты и скрипты сборки.
 
 ```text
 gpt-mini/
-├── mini-assistant/          # Исходный код Rust-демона, тесты и сборка
+├── mini-assistant/          # Исходный код Rust-демона (https://github.com/0leks11/mini-assistant)
 │   ├── src/                 # Модули: audio, gemini, openai, wakeword, spotify, ha, web
 │   ├── scripts/             # Скрипты сборки (build.sh), деплоя (deploy.sh) и верификации
 │   ├── tests/               # 210+ юнит-тестов
@@ -50,6 +52,13 @@ gpt-mini/
 ---
 
 ## Сборка и установка
+
+### 0. Клонирование репозиториев
+```sh
+git clone https://github.com/0leks11/gpt-mini.git
+cd gpt-mini
+git clone https://github.com/0leks11/mini-assistant.git
+```
 
 ### 1. Подготовка конфигурации
 Скопируйте примеры файлов конфигурации:
