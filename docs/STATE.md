@@ -558,3 +558,20 @@ Read-only попытка входа через Pi 02.11 14:43 завершила
      - Устранён дубль процессов; на устройстве один `mini-assistant` (27499→27513), supervisor + watchdog, Soloist `logged in: yes`, `active device: yes`.
    - **Проверки:** `cargo test --offline --locked` — 197 passed, 0 failed; сборка `armv7-unknown-linux-musleabihf` воспроизводима (SHA256 `52b5380161156cfddf01af8e595bc19402fd90a2f16e5d6fcf29604a993763ac`); тег `release/2026-11-09-1d458d7`.
    - **Открытый долг:** Soloist-окружение пока не воспроизводимо скриптом (`deploy_soloist.sh` отсутствует); API-ключ Soloist передаётся в argv и виден в `ps` — требует ротации и переноса в файл; часть docs в корневом репозитории не закоммичена; хук корневого репозитория падает на битых ссылках `STATE.md`.
+
+
+12. **Статус 10.11 17:10 (ПУБЛИКАЦИЯ РЕЛИЗА НА GITHUB И АУДИТ БЕЗОПАСНОСТИ ZERO-LEAK):**
+    - **Глубокий аудит безопасности и очистка секретов:**
+      - Просканирована вся история коммитов обоих репозиториев (gpt-mini и mini-assistant).
+      - В историческом коммите обнаружен и полностью вычищен утекавший API-ключ Google AI Studio с помощью git-filter-repo.
+      - Все чувствительные локальные директории (.private, .tmp-soloist, omp-telegram-collab, tg agent, scripts/spotify_auth_local.py) надёжно изолированы в .gitignore.
+      - Шаблоны .env.example и config.example.toml проверены — содержат исключительно безопасные плейсхолдеры.
+    - **Честное и человеческое описание проекта:**
+      - Создано простое, спокойное и честное описание README.md без маркетингового пафоса. Главный акцент: 100% избавление от софта и архитектуры Яндекса, 0% кода Яндекса на устройстве.
+    - **Публикация в аккаунт GitHub 0leks11:**
+      - Опубликован системный репозиторий: https://github.com/0leks11/gpt-mini
+      - Опубликован репозиторий Rust-рантайма: https://github.com/0leks11/mini-assistant
+    - **Верификация тестов:**
+      - mini-assistant: 210 unit & contract tests PASS, 0 clippy warnings.
+      - gpt-mini: 12 workflow & safety tests PASS.
+      - Физическая колонка: 22/22 контрольных инварианта (verify_deploy.sh).
