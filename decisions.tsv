@@ -1,3 +1,4 @@
 ts	phase	decision	why	evidence	result
 2026-11-18T15:19:30Z	start	resume wake-word evolution after approval of WAKEWORD_STRICT_AND_CALIBRATION_SPEC	user approved plan to eliminate noise wakes and add signature matrix calibration	WAKEWORD_STRICT_AND_CALIBRATION_SPEC.md	approved
 2026-11-18T15:40:00Z	implementation	implemented Phase 1-3 (strict wakeword, pre-roll sanitize, ducking floor 2, 30-step signature matrix, API, Web UI)	fix swings bug (spontaneous talk / deafness) and provide on-device acoustic signature analysis	commit c566465 in mini-assistant, 214 tests PASS, binary sha256 8a7e5705...	ready for deployment upon device power-on
+2026-11-18T15:45:00Z	release	deployed commit c566465 to GPT Mini at 10.77.0.111	power restored; deployed with ./scripts/deploy.sh --skip-build --restart; verify_deploy.sh PASS=22 FAIL=0	assistant.log, verify_deploy.sh, web status 200	live and operating on Wi-Fi ffff
