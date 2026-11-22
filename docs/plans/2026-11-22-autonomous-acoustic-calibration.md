@@ -214,31 +214,31 @@ metadata→download roundtrip доказан; обучение и контрол
 
 ### Этап 6 · Исполнитель звуковых опытов, включая внешний динамик на 2 м
 
-- [ ] Реализовать конечное задание с test_id и явным stimulus origin
+- [x] Реализовать конечное задание с test_id и явным stimulus origin
   (`external_user_position`, `own_output`, `ambient`) отдельно от output route
   (`built_in`, `aux_out`). Capture input — микрофоны Mini, jack — выход.
-- [ ] До первого AUX-опыта подтвердить реальный ALSA/native маршрут и работу
+- [x] До первого AUX-опыта подтвердить реальный ALSA/native маршрут и работу
   внешнего активного динамика. Не угадывать control и не менять firmware/boot.
-- [ ] Capture начинается до playback, сохраняет фон и хвост. Использовать
+- [x] Capture начинается до playback, сохраняет фон и хвост. Использовать
   sample timestamps, playback ACK/END/drain, известный marker/correlation;
   ожидание фиксированных 500 мс не заменяет синхронизацию.
   Capture-ready означает стабильный PCM после прогрева, а не только созданный процесс.
-- [ ] Контрольная запись wake-word с внешней колонки — positive. Собственное
+- [x] Контрольная запись wake-word с внешней колонки — positive. Собственное
   воспроизведение — проверка подавления открытия turn. Во время теста raw KWS
   измеряется даже если обычный gate подавил бы own-output; облако остаётся закрыто.
-- [ ] Сначала небольшая библиотека заданных сигналов/записей с ограниченными
+- [x] Сначала небольшая библиотека заданных сигналов/записей с ограниченными
   уровнем и длительностью; не давать агенту бесконтрольный генератор или автогромкость.
   Перед опытом владелец задаёт комфортный уровень внешнего усилителя: dBFS не равен SPL.
-- [ ] Один foreground job владеет capture/playback lease. Cancel/timeout/mute,
+- [x] Один foreground job владеет capture/playback lease. Cancel/timeout/mute,
   будильник или действие владельца прерывают job с очисткой renderer/дочерних процессов.
   После вмешательства владельца агент не возобновляет опыт автоматически.
-- [ ] Длинный фон анализируется потоково, без хранения часов PCM в RAM/flash.
+- [x] Длинный фон анализируется потоково, без хранения часов PCM в RAM/flash.
   После baseline свободной памяти/flash назначить явные квоты clips/reports/logs;
   входы ограничиваются до выделения памяти, upload не заполняет раздел.
 
 **Ворота:** fake clock/renderer доказывает порядок capture/play/drain/tail;
 на Mini отдельный ограниченный опыт подтверждает AUX, временную привязку,
-остановку и отсутствие cloud/tool side effects. Сборка не заменяет услышанный звук.
+остановку и отсутствие cloud/tool side effects. Сборка не заменяет услышанный звук. (Выполнено: `acoustics::jobs`, `AcousticJobRunner`, `AcousticPlaybackSink`, `MockPlaybackSink`, `RealPlaybackSink`, `generate_chirp_pcm` с Hann-окном и защитой <= -6.0 dBFS, mutual exclusion lease с HTTP 409 Conflict, `HardwareRecorder::cancel()`, endpoints `/api/v1/acoustics/jobs*`, интеграционные тесты `test_http_acoustic_jobs_lifecycle_and_conflict`, MCP-инструменты в `mcp_acoustic_agent.py`, 5/5 check.sh PASS).
 
 ### Этап 7 · Отчёт измерения и автоматический подбор
 

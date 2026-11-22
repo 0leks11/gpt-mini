@@ -1,3 +1,57 @@
+# 23.11.2026 — Автономная калибровка: Этап 6 (исполнитель звуковых опытов и синхронизация playback) выполнен
+
+Завершён **Этап 6** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (раннер измерительных заданий `AcousticJobRunner`, выбор stimulus origin и output route, генерация широкополосного chirp sweep, синхронизация pre-roll/playback ACK/post-roll tail, взаимное исключение concurrent jobs через HTTP 409 Conflict, прерывание и MCP-инструменты):
+- **mini-assistant (коммит `db08a38`):**
+  - **Раннер акустических заданий (`src/acoustics/jobs.rs`):**
+    - Введены структуры и перечисления:
+      - `StimulusOrigin`: `ExternalUserPosition` (`external_user_position` — положительный контроль wake-word на 2 м), `OwnOutput` (`own_output` — проверка подавления открытия turn на собственном звуке), `Ambient` (`ambient` — потоковый замер шума комнаты).
+      - `OutputRoute`: `BuiltIn` (`built_in`), `AuxOut` (`aux_out` — 3.5 мм линейный выход), `None` (`none`).
+      - `StimulusSignal`: `Sample` (по ID из `SamplesStore`), `ChirpSweep` (линейный/логарифмический свип с Hann-окнами), `Silence` (калиброванное фоновое молчание).
+      - `JobState`: `Pending`, `Preparing`, `Running`, `Completed`, `Cancelled`, `Failed`.
+      - `CreateJobDto`, `JobSummary`, `JobDetail`, `JobsSnapshot`, `CapturedAudioMetrics`.
+    - **Генерация широкополосного свипа (`generate_chirp_pcm`):**
+      - Безопасная генерация линейного chirp-сигнала в диапазоне 20..8000 Гц с частотой дискретизации 16 000 Гц.
+      - 5-мс гладкое Hann-окно на старте и завершении для предотвращения щелчков и импульсных выбросов (edge transients).
+      - Строгий потолок амплитуды: пиковая громкость не может превышать -6.0 dBFS (амплитуда <= 16384), предотвращая цифровой клиппинг и акустическую травму. Запросы с объёмом выше -6.0 dBFS отклоняются валидатором.
+    - **Трейт и бэкенды воспроизведения (`AcousticPlaybackSink`):**
+      - `MockPlaybackSink` для хост-тестирования без ALSA.
+      - `RealPlaybackSink` для устройства: использует `AudioPlayback` с захватом эксклюзивного `claim_alarm` лизинга (глушит облачный синтез и сторонние источники), конвертирует 16 кГц в 24 кГц моно, передает PCM чанками и ожидает полного завершения/дрейна через пустой кадр `ALARM_RESPONSE_ID`.
+      - Строгая проверка AUX: если `OutputRoute::AuxOut` запрошен на системе без поддержки AUX, возвращается ошибка `JobError::Unsupported` (HTTP 422 Unprocessable Entity), без скрытого или негласного переключения на встроенный динамик.
+    - **Синхронизация трактов записи и воспроизведения:**
+      - Порядок: 1) включение `lab.set_test_session(true)` -> 2) запуск микрофонного захвата -> 3) ожидание прогрева и фона `pre_roll_ms` -> 4) старт стимула с фиксацией `playback_started_at_ms` -> 5) ожидание завершения и ACK дрейна воспроизведения с фиксацией `playback_ended_at_ms` -> 6) захват реверберационного хвоста `post_roll_ms` -> 7) расчёт метрик захваченного аудио (RMS, пик, SNR, клиппинг) -> 8) автосохранение записи в `SamplesStore` в сплит `Calibration` -> 9) сбор событий `AcousticLab` -> 10) снятие тестовой сессии `lab.set_test_session(false)`.
+    - **Эксклюзивный лизинг и прерывание:**
+      - В каждый момент времени может исполняться только один foreground job; попытка параллельного запуска возвращает `JobError::Conflict` (HTTP 409 Conflict).
+      - Идемпотентная отмена `cancel_active(reason)` немедленно останавливает playback sink, отменяет запись в `HardwareRecorder`, сбрасывает тестовую сессию и переводит задание в статус `Cancelled`.
+  - **Доработка микрофонного рекордера (`src/wakeword/enrollment.rs`):**
+    - Добавлен метод `HardwareRecorder::cancel(&self)` для немедленной и чистой отмены текущего сеанса записи без подвисания тредов.
+  - **Интеграция в Web REST API (`src/web/mod.rs` и `src/web/auth.rs`):**
+    - Добавлены эндпоинты:
+      - `GET /api/v1/acoustics/jobs` (текущий активный job, история последних 20 заданий и статус поддержки AUX).
+      - `POST /api/v1/acoustics/jobs` (запуск измерительного задания, 201 Created при успехе, 409 Conflict при занятости, 422 при неподдерживаемом AUX).
+      - `GET /api/v1/acoustics/jobs/{id}` (детальная информация, таймстемпы pre/playback/post-roll, метрики и события).
+      - `POST /api/v1/acoustics/jobs/{id}/cancel` (отмена выполняющегося задания).
+      - `GET /api/v1/acoustics/jobs/{id}/events` (события KWS и детекций, привязанные к заданию).
+    - В `src/web/auth.rs` добавлены правила авторизации: GET требует `Scope::Jobs` или `Scope::AcousticsRead`, POST требует `Scope::Jobs`.
+  - **Интеграция в `main.rs`:**
+    - Инициализирован `RealPlaybackSink` и `AcousticJobRunner`, подключённые к `ControlCenterServer`.
+  - **MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Добавлены инструменты: `list_acoustic_jobs`, `start_acoustic_job`, `get_acoustic_job`, `cancel_acoustic_job`, `get_acoustic_job_events`.
+    - Синхронизирована корневая копия `scripts/mcp_acoustic_agent.py`.
+  - **Тестирование и верификация ворот:**
+    - Интеграционный HTTP-тест `test_http_acoustic_jobs_lifecycle_and_conflict`: проверен жизненный цикл задания, отказ при неподдерживаемом AUX (422), успешный запуск (201), блокировка параллельного задания (409 Conflict), отмена (cancel -> 200), отказ анонимным клиентам (401).
+    - Юнит-тесты `acoustics::jobs::tests` в `mini-assistant`: генерация свипа, ограничение громкости, взаимное исключение, отмена задания.
+    - Python тест `tests/test_mcp_acoustic_agent.py`: проверка схем и вызовов инструментов MCP-агента.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (504 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (31/31 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 7](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-7--отчёт-измерения-и-автоматический-подбор) — отчёт измерения и автоматический подбор (связывание profile/model/sample hashes, расчёт recall/FA/задержек, программный подбор параметров по fixed calibration corpus).
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 5 (библиотека записей, WAV-валидация и изоляция сплитов) выполнен
 
 Завершён **Этап 5** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (библиотека контрольных записей, валидация mono PCM16 16 кГц WAV, устранение переполнения i16::MIN, метрики клиппинга/SNR и изоляция сплитов):
