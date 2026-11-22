@@ -1,3 +1,55 @@
+# 23.11.2026 — Автономная калибровка: Этап 7 (отчёт измерения, фильтрация сбоев и подбор параметров) выполнен
+
+Завершён **Этап 7** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (структурированный `JobReport`, фильтрация технических сбоев `is_valid: false`, анализ затухания тракта < 8 кГц, оценщик KWS-корпуса `AcousticEvaluator`, bounded coordinate search `AcousticSearcher` с многокритериальным ранжированием кандидатов, Web REST endpoints и MCP-инструменты):
+- **mini-assistant (коммит `3f20629`):**
+  - **Модуль оценки и подбора параметров (`src/acoustics/evaluator.rs`):**
+    - Введены структуры:
+      - `JobReport`: привязка хэшей модели (`model_sha256`), ревизии настроек (`applied_revision`), стимула, источника (`StimulusOrigin`), маршрута (`OutputRoute`), метрик захваченного аудио, валидности (`is_valid`, `validity_reason`), KWS-метрик (recall, false alarms, latency, extra detections) и хронологических событий.
+      - `FrequencyResponseSummary`: полосовой анализ относительного затухания тракта в 3 диапазонах (100..500 Гц, 500..2000 Гц, 2000..6000 Гц) со строгим дисклеймером («Relative audio path attenuation below 8kHz; does not substitute room acoustic RT60»).
+      - `SampleEvaluationResult` и `EvaluationOutcome` (`detected`, `missed`, `false_alarm`, `own_output_leak`, `extra_detection`, `technical_failure`).
+      - `CorpusEvaluationReport`: recall, false alarm rate per hour (FA/hr), утечки собственного звука (own output leaks), серийные дубли (extra triggers), средняя задержка (latency) и realtime factor ($t_{\text{proc}} / t_{\text{audio}}$).
+      - `CandidateSummary` и `SearchReport`: ранжированные кандидаты с детализацией метрик.
+    - **Фильтрация технических отказов:**
+      - Тишина на микрофоне во время воспроизведения стимула (RMS < 5.0), цифровой клиппинг или аппаратные сбои помечаются `is_valid: false` с явной причиной в `validity_reason`. Технический сбой не трактуется ложно как «плохая акустика комнаты» и не искажает KWS recall.
+    - **Многокритериальная функция ранжирования (`compute_candidate_score`):**
+      - Формула: $S = 100 \times \text{recall} - 10 \times \text{FA/hr} - 20 \times \text{own\_leaks} - 2 \times \text{extra\_triggers} - \text{RTF\_penalty}$.
+      - Штрафует ложные срабатывания на собственном звуке (barge-in leakage), пропуски, серийные дубли и нагрузку на CPU (превышение RTF > 0.5).
+    - **Ограниченный поиск кандидатов (`AcousticSearcher`):**
+      - Поиск по сетке/координатам с потолком `MAX_SEARCH_TRIALS = 20`.
+      - Оптимизирует `threshold`, `score_mode`, `gain_ref` и `band_pass`.
+      - Возвращает компактные сводки для LLM без передачи непрерывных PCM-кадров.
+  - **Интеграция с `AcousticJobRunner` (`src/acoustics/jobs.rs`):**
+    - Добавлено кольцевое хранилище отчётов `reports: Arc<Mutex<HashMap<String, JobReport>>>`.
+    - Добавлен метод `get_report(&self, job_id: &str) -> Option<JobReport>`.
+    - Автоматическая генерация и сохранение `JobReport` при завершении каждого измерительного задания.
+  - **Маршрутизация и авторизация (`src/web/mod.rs` и `src/web/auth.rs`):**
+    - Добавлены эндпоинты:
+      - `GET /api/v1/acoustics/jobs/{id}/report` — структурированный отчёт о выполненном задании.
+      - `POST /api/v1/acoustics/evaluate` — запуск оценки кандидата настроек на выбранном сплите (`calibration`, `train`, `held_out`).
+      - `POST /api/v1/acoustics/search` — автоматический подбор параметров по фиксированному калибровочному корпусу (до 20 итераций).
+    - В `src/web/auth.rs` добавлена проверка разрешений (`Scope::Jobs` или `Scope::AcousticsWrite`).
+  - **MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Добавлены методы: `get_acoustic_job_report`, `evaluate_acoustic_candidate`, `search_acoustic_candidates`.
+    - Синхронизирована корневая копия `scripts/mcp_acoustic_agent.py`.
+  - **Тестирование и верификация ворот:**
+    - Юнит-тесты `acoustics::evaluator::tests`:
+      - `test_compute_candidate_score_weighting`: проверка взвешивания метрик.
+      - `test_frequency_response_and_validity_filtering`: верификация фильтрации полос < 8 кГц и отбраковки тихого микрофона (`is_valid: false`).
+      - `test_evaluator_synthetic_ground_truth_and_reproducibility`: проверка синтетического ground truth и воспроизводимости результатов.
+      - `test_bounded_candidate_search`: верификация ограниченного поиска (4 триала) с отбором лучшего кандидата.
+    - Интеграционный HTTP-тест `test_http_acoustic_evaluations_and_reports`: сквозная проверка заливки сэмпла, `POST /evaluate`, `POST /search` и `GET /jobs/{id}/report`.
+    - Python тест `tests/test_mcp_acoustic_agent.py`: проверка вызовов и JSON-схем новых инструментов.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (509 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (31/31 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 8](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-8--достроить-acoustic-и-подключить-apimcp-клиента) — достроить Acoustic UI (именованные профили, samples с прослушиванием, сессия, сравнение отчётов) и подключить API/MCP-клиента с версионированным OpenAPI/JSON Schema.
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 6 (исполнитель звуковых опытов и синхронизация playback) выполнен
 
 Завершён **Этап 6** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (раннер измерительных заданий `AcousticJobRunner`, выбор stimulus origin и output route, генерация широкополосного chirp sweep, синхронизация pre-roll/playback ACK/post-roll tail, взаимное исключение concurrent jobs через HTTP 409 Conflict, прерывание и MCP-инструменты):
