@@ -1,3 +1,26 @@
+# 22.11.2026 — Автономная калибровка: Этап 1 (исправление контракта настроек и интерфейса) выполнен
+
+Завершён **Этап 1** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (F2, F3, F5–F9):
+- **mini-assistant (коммит `1769581`):**
+  - **F2 (Строгий сетевой DTO):** Создан `AcousticSettingsDto` со всеми 33 полями, атрибутом `deny_unknown_fields`, запретом `#[serde(default)]` при частичном JSON, строгой валидацией диапазонов, запретом NaN/Infinity и валидацией строковых перечислений.
+  - **F3 (Устранение `stepMismatch`):** Реализовано форматирование float-значений в `acoustic_lab.html` через `formatValueForInput` и `stepDecimals(step)`, исключающее ошибку валидации браузера `stepMismatch` для дробных полей (включая `gain_ref` с шагом `1e-5`).
+  - **F5 (Идентификация экземпляра и устойчивость ревизий):** В `Snapshot` и `ApplyPayload` добавлены `runtime_instance_id` (UUID), `saved_revision` и `applied_revision`. В HTTP-обработчик добавлены заголовок `ETag` и проверка `If-Match` (возврат HTTP 412 при несовпадении ревизии и HTTP 409 при несовпадении `runtime_instance_id`).
+  - **F6 (Разделение состояний сбоя и сброс вечного pending):** Закрытие канала ACK со стороны аудиоцикла теперь явно отличается от таймаута; флаг `pending` не зависает в `true` при ошибке; добавлен метод `restore_working` и маршрут `POST /api/v1/acoustics/restore`.
+  - **F7 (Устранение blanket epsilon):** Точность сравнения `valuesEqual` привязана к шагу контрола (допуск `1e-6` для `gain_ref` с шагом `1e-5`).
+  - **F8 (Канонизация алиасов и нормализация границ):** Значения `"average"` и `"avg"` канонизируются на границе валидации; граничные значения учитывают погрешность округления `1e-5`.
+  - **F9 (Раздельное отображение ревизий и восстановление профиля):** В UI разделены `applied_revision` и `saved_revision`; добавлена кнопка возврата к работающему профилю с вызовом `/api/v1/acoustics/restore`.
+  - **apply_timing:** Все 33 параметра схемы получили явное поле `apply_timing` (`"live"`, `"next_capture"` или `"next_start"`).
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (227 lib + 9 acoustics::tests + 9 keyword_enroll + 236 bin = 481 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (30/30 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 2](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-2--исправить-shadow-и-выделить-независимое-наблюдение-f1) — исправление сброса shadow-буфера на чанках и изоляция PCM observation от облачного клиента.
+
+---
+
 # 22.11.2026 — Автономная калибровка: Этап 0 (зелёный baseline) выполнен
 
 Завершён **Этап 0** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md):
