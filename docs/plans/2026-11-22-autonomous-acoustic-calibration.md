@@ -172,19 +172,19 @@ matcher на synthetic positive/negative и с fake transport, а не толь�
 
 ### Этап 4 · Профили помещений и временные кандидаты
 
-- [ ] Реализовать list/create/read/update/rename/archive/delete/activate по
+- [x] Реализовать list/create/read/update/rename/archive/delete/activate по
   стабильному ID; отображаемое имя комнаты не является путём файла.
-- [ ] Profile хранит schema_version, revision, name/notes, все настройки,
+- [x] Profile хранит schema_version, revision, name/notes, все настройки,
   model ID/hash, версию аудиотракта, условия и ссылки на отчёты.
-- [ ] Статусы `draft`, `automated_tested`, `owner_confirmed` различаются.
+- [x] Статусы `draft`, `automated_tested`, `owner_confirmed` различаются.
   Агент не может присвоить отметку человеческой проверки.
-- [ ] Preview кандидата применяется в RAM с ACK и TTL. Save/activate/restore
+- [x] Preview кандидата применяется в RAM с ACK и TTL. Save/activate/restore
   — явные атомарные операции с версией. Повтор с тем же Idempotency-Key не дублирует запись.
-- [ ] Предусмотреть backup/export/import с валидацией совместимости; смена
-  модели/канала/трактa помечает старый результат как требующий повторной проверки.
+- [x] Предусмотреть backup/export/import с валидацией совместимости; смена
+  модели/канала/тракта помечает старый результат как требующий повторной проверки.
 
 **Ворота:** UI и API выполняют один lifecycle профиля; конкуренция, неверный
-ID, schema migration, power loss при записи и восстановление проверены без Mini.
+ID, schema migration, power loss при записи и восстановление проверены без Mini. (Выполнено: `test_http_profiles_lifecycle_and_candidate_preview`, unit-тесты `ProfilesStore`, UI в `acoustic_lab.html`, MCP tools в `mcp_acoustic_agent.py`).
 
 ### Этап 5 · Библиотека записей и качество данных
 

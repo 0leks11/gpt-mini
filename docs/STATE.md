@@ -1,3 +1,45 @@
+# 23.11.2026 — Автономная калибровка: Этап 4 (профили помещений и временные кандидаты) выполнен
+
+Завершён **Этап 4** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (профили помещений, статусы, атомарное хранилище и предпросмотр кандидатов с TTL):
+- **mini-assistant (коммит `c63bbaf`):**
+  - **Хранилище профилей помещений (`src/acoustics/profiles.rs`):**
+    - Реализована структура `AcousticProfile` со стабильным ID, версией схемы (`schema_version = 1`), монотонной ревизией, человекочитаемым названием комнаты, заметками, всеми 33 параметрами `AcousticSettingsDto`, привязкой к модели/пайплайну, акустическими условиями (`conditions`), ссылками на отчёты и статусом жизненного цикла.
+    - Введены статусы `ProfileStatus`: `draft`, `automated_tested`, `owner_confirmed`. Гарантировано серверное ограничение: калибровочный AI-агент не может присвоить профилю статус `owner_confirmed` (возврат HTTP 403 Forbidden).
+    - Разработан `ProfilesStore` с атомарной двухфазной записью (запись во временный файл + `fsync` файла + атомарный `rename` + `fsync` директории), защищающий от потери питания и повреждения JSON.
+    - Реализована дедупликация и идемпотентность через заголовок `Idempotency-Key` (повторный запрос возвращает существующий профиль без дублирования).
+    - Реализован механизм инвалидации `check_audio_pipeline_compatibility`: при смене версии аудиотракта или модели старые профили автоматически переводятся в статус `draft` с отметкой о необходимости повторной калибровки.
+  - **Предпросмотр кандидатов с TTL в RAM (`src/acoustics.rs`):**
+    - В `AcousticLab` добавлен метод `apply_candidate_preview`: валидированные настройки кандидата передаются в аудиоцикл через канал ACK без записи в `config.toml`.
+    - Реализован асинхронный откат по таймеру TTL: если по истечении таймаута профиль не был подтверждён или активирован, аудиоцикл автоматически возвращается к предыдущим сохранённым настройкам.
+  - **Интеграция в Web REST API (`src/web/mod.rs` и `src/web/auth.rs`):**
+    - Добавлены эндпоинты:
+      - `GET /api/v1/acoustics/profiles` (с поддержкой `?include_archived=true` и возвратом `active_profile_id`).
+      - `POST /api/v1/acoustics/profiles` (создание профиля с `Idempotency-Key` и проверкой роли).
+      - `GET /api/v1/acoustics/profiles/{id}` (чтение профиля).
+      - `PUT /api/v1/acoustics/profiles/{id}` (обновление с проверкой оптимистичной блокировки `If-Match`).
+      - `POST /api/v1/acoustics/profiles/{id}/activate` (применение в аудиоцикл, запись в `config.toml` и отметка как активного).
+      - `POST /api/v1/acoustics/profiles/{id}/archive` и `DELETE /api/v1/acoustics/profiles/{id}`.
+      - `POST /api/v1/acoustics/profiles/export` и `POST /api/v1/acoustics/profiles/import`.
+      - `POST /api/v1/acoustics/preview` (предпросмотр кандидата в RAM с TTL).
+    - В `src/web/auth.rs` добавлены маршруты для профилей в матрицу авторизации со скоупом `Scope::Profiles`.
+  - **Интерфейс Акустической лаборатории (`src/web/acoustic_lab.html`):**
+    - Добавлен блок «Профили помещений и сравнение» с бейджем активного профиля, выпадающим списком сохранённых комнат, кнопками «Загрузить в форму», «Активировать на Mini», «Предпросмотр (30 сек)» и «Сохранить как комнату…».
+  - **MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Расширен инструментами: `list_room_profiles`, `get_room_profile`, `create_room_profile`, `update_room_profile`, `activate_room_profile`, `preview_candidate_profile`.
+  - **Тестирование и верификация ворот:**
+    - Реализован интеграционный HTTP-тест `test_http_profiles_lifecycle_and_candidate_preview` (создание, идемпотентность, запрет фейкового подтверждения владельца, оптимистичная блокировка 412, предпросмотр в RAM, активация, экспорт, архивация, запрет анонимных мутаций).
+    - Юнит-тесты `ProfilesStore` в `src/acoustics/profiles.rs`.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (227 lib + 2 profiles::tests + 4 auth::tests + 2 http_lifecycle + 13 acoustics + 9 keyword_enroll + 236 bin = 493 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (31/31 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 5](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-5--библиотека-записей-и-качество-данных) — библиотека записей и качество данных (отделение контрольных сэмплов от enrollment, валидация mono PCM16 WAV 16 кГц, измерительный путь записи).
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 3 (ограниченный доступ, scopes, bounded lease и MCP) выполнен
 
 Завершён **Этап 3** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (ограниченный доступ, разделение ролей, сессии и MCP-адаптер):
