@@ -1,3 +1,39 @@
+# 23.11.2026 — Автономная калибровка: Этап 3 (ограниченный доступ, scopes, bounded lease и MCP) выполнен
+
+Завершён **Этап 3** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (ограниченный доступ, разделение ролей, сессии и MCP-адаптер):
+- **mini-assistant (коммит `412af23`):**
+  - **Модуль контроля доступа (`src/web/auth.rs`):**
+    - Введена система ролей и разрешений (`Scope`): `AcousticsRead`, `AcousticsWrite`, `Profiles`, `Samples`, `Jobs`.
+    - Реализована структура сессионного лизинга `CalibrationLease` со строгими ограничениями: `lease_id`, `baseline_revision`, `max_duration_secs`, `max_volume_pct`, `max_runs`, счетчик `runs_count` и флаг `active`.
+    - Реализована структура калибровочной сущности `CalibrationToken` с ограничением по времени жизни (TTL), скоупам и привязкой к лизингу.
+    - Введён `AuthManager` с методами `issue_calibration_token`, `authenticate`, `authorize_route`, `record_run`, `revoke_token`, `revoke_lease`.
+  - **Серверная матрица авторизации (`src/web/mod.rs`):**
+    - Проверка идентификатора клиента (`RequestIdentity`: `Owner`, `Calibration`, `Anonymous`) выполняется ДО диспетчеризации маршрутов.
+    - Анонимные запросы и запросы с пустым/невалидным/истекшим/отозванным Bearer-токеном получают HTTP 401 Unauthorized и не переходят в анонимный режим чтения приватных данных.
+    - Калибровочная сущность (`Calibration`) строго изолирована: при попытке вызвать административные маршруты (`/api/v1/system/restart`, `/api/v1/system/reboot`, `/api/v1/voice`, `/api/v1/volume`, `/api/v1/led`, `/api/spotify/*`, `/api/v1/wakeword/*`, `/api/v1/acoustics/tokens`) возвращается HTTP 403 Forbidden.
+    - Добавлены эндпоинты управления токенами и лизингом:
+      - `POST /api/v1/acoustics/tokens` (выдача калибровочного токена владельцем).
+      - `POST /api/v1/acoustics/tokens/revoke` (отзыв токена).
+      - `POST /api/v1/acoustics/lease/revoke` (отзыв лизинга с локальной остановкой тестовой сессии `lab.set_test_session(false)`).
+    - В `handle_api_post_calibration` встроен учёт лимита попыток (`max_runs`) через `record_run`. При превышении лимита возвращается HTTP 403 Forbidden.
+  - **Локальный MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Реализован протокол MCP (JSON-RPC 2.0 stdio) для работы внешних AI-агентов на Mac через безопасный канал (SSH-туннель/Bearer token).
+    - Предоставляет набор инструментов: `get_acoustic_status`, `apply_acoustic_profile`, `restore_working_profile`, `get_acoustic_events`, `set_test_session`, `revoke_calibration_lease`.
+    - Токены и секреты маскируются и никогда не попадают в stdout/логи; отладочные сообщения пишутся исключительно в stderr.
+  - **Тестирование и верификация ворот:**
+    - Реализован интеграционный HTTP-тест `test_http_auth_and_calibration_lifecycle` на базе `TcpListener` (loopback): сквозная проверка выпуска токена, выполнения разрешённых запросов, гарантированного запрета (403) системных/административных вызовов, отсечения анонимных мутаций (401), отзыва лизинга и мгновенной остановки теста.
+    - Реализован юнит-тест MCP-адаптера `tests/test_mcp_acoustic_agent.py`.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (227 lib + 4 auth::tests + 1 http_lifecycle + 13 acoustics + 9 keyword_enroll + 236 bin = 490 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (31/31 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 4](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-4--профили-помещений-и-временные-кандидаты) — реализация профилей помещений (комнат) и временных кандидатов калибровки.
+
+---
+
 # 22.11.2026 — Автономная калибровка: Этап 2 (исправление shadow и независимое наблюдение) выполнен
 
 Завершён **Этап 2** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (F1, независимое PCM-наблюдение и события):

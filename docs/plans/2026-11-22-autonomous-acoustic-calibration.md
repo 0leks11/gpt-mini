@@ -152,23 +152,23 @@ matcher на synthetic positive/negative и с fake transport, а не толь�
 
 ### Этап 3 · Ввести ограниченный доступ и управление сессией
 
-- [ ] Владелец через UI выдаёт отдельную calibration identity со сроком и
+- [x] Владелец через UI выдаёт отдельную calibration identity со сроком и
   scopes: settings/profiles, разрешённые samples, capture/playback/jobs/reports.
-- [ ] Проверять identity до route dispatch. Пустой, отсутствующий, неверный,
+- [x] Проверять identity до route dispatch. Пустой, отсутствующий, неверный,
   истёкший и отозванный token не включают анонимный режим.
-- [ ] Calibration identity не может вызвать system/reboot/restart, voice,
+- [x] Calibration identity не может вызвать system/reboot/restart, voice,
   Spotify, Wi-Fi или старые enrollment/admin aliases. Защитить административные
   мутации owner identity, чтобы сброс заголовка авторизации не обходил ограничения.
-- [ ] UI сессия и machine-client доступ имеют общую серверную политику;
+- [x] UI сессия и machine-client доступ имеют общую серверную политику;
   Origin/CSRF дополняют её, но не считаются авторизацией.
-- [ ] Локальный MCP сначала stdio на Mac; доступ к Mini по защищённому каналу,
+- [x] Локальный MCP сначала stdio на Mac; доступ к Mini по защищённому каналу,
   без публикации LAN HTTP с bearer в интернет. Секреты не в URL/логах/профилях.
-- [ ] Сессия содержит lease, baseline, режим источника, пределы длительности,
+- [x] Сессия содержит lease, baseline, режим источника, пределы длительности,
   громкости, числа опытов и хранения. Нет бесконечных полномочий из одного job ID.
 
 **Ворота:** проверка разрешённых/запрещённых маршрутов реальными HTTP fixtures;
 подмена actor/ID, повтор, отсутствие Origin/token и обход через alias не расширяют
-права. Отзыв lease останавливает тест локально.
+права. Отзыв lease останавливает тест локально. (Выполнено: `test_http_auth_and_calibration_lifecycle`, unit-тесты `AuthManager`, MCP adapter `scripts/mcp_acoustic_agent.py`, `test_mcp_acoustic_agent.py`).
 
 ### Этап 4 · Профили помещений и временные кандидаты
 
