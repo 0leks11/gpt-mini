@@ -1,3 +1,21 @@
+# 22.11.2026 — Автономная калибровка: Этап 0 (зелёный baseline) выполнен
+
+Завершён **Этап 0** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md):
+- **mini-assistant (коммит `2419209`):**
+  - Восстановлены проверки Clippy (`-D warnings`): исправлены `chunks_exact_to_as_chunks` через `as_chunks` в `src/acoustics.rs` и `src/alarms/sound.rs`, устранён `needless_range_loop` в `src/wakeword/enrollment.rs`.
+  - Исправлен контракт теста `keyword-enroll`: синтетический хвост и eager/delayed режимы детектора разделены явно.
+  - Разработан и верифицирован сквозной runner проверок `scripts/check.sh` с сохранением изолированных логов каждой стадии и юнит-тестами `tests/test_check_runner.py`.
+- **Результаты проверки baseline (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy): PASS (exit=0)
+  - `rust` (cargo test --all-targets): PASS (227 lib + 3 bcm_attach + 9 keyword_enroll + 236 bin = 475 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (30/30 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 1](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-1--исправить-контракт-настроек-и-интерфейс-f2-f3-f5f9) — исправление контракта сетевого DTO, устранение `#[serde(default)]` при частичном JSON, устранение `stepMismatch` (F3) и рассинхронизации ревизий (F5, F6, F9).
+
+---
+
 # Релиз 22.11 (v5) — Акустическая лаборатория (/acoustics), Hot-Reload калибровки и устранение обрезки составных слов
 
 На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) развёрнута полнофункциональная система тонкой настройки звукового тракта и исправлен алгоритм записи сэмплов (коммит `f8aad13` в `mini-assistant`, бинарник `ea74c1be...` 4.6 МБ, `verify_deploy.sh` 21/21 PASS):
