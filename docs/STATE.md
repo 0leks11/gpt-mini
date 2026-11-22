@@ -1,31 +1,37 @@
-# Релиз 22.11 (v2) — Персистентность калиброванных порогов Wake-Word в config.toml при перезагрузке
+# Релиз 22.11 (v3) — Интерактивная калибровка акустических порогов, Hot-Reload и строгое изолирование микрофона
 
-На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) развёрнуто исправление сброса параметров детектора и обеспечено 100% сохранение сигнатур и порогов в конфигурационном файле перезагрузки `config.toml` (коммит `7a43376` в `mini-assistant`, бинарник `ba3890d1...` 3.5 МБ, `verify_deploy.sh` 21/21 PASS):
+На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) развёрнута и аппаратно верифицирована система пользовательской калибровки звука и чувствительности (коммит `1cff4c5` в `mini-assistant`, бинарник `1c222e58...` 3.6 МБ, `verify_deploy.sh` 21/21 PASS):
 
-1. **Диагностика и первопричина сбоя («срабатывает 1–2 раза и замолкает»):**
-   - **Недостижимый порог среднего (`avg_threshold`):** При естественном произнесении пиковый скор достигает `0.60–0.64`, но средний по окну (`avg_score`) для длинных слов составляет `0.22–0.26`. Дефолтный `avg_threshold = 0.28` (и старый в кодовой базе `0.34`) отбрасывал подавляющее большинство вызовов, пропуская лишь единичные всплески.
-   - **Задержка тишины (`eager = false`):** Rustpotter ожидал 1.5 секунды абсолютной тишины после ключевого слова (`countdown == 0`) перед подтверждением детекции. При слитной речи с командой детекция сбрасывалась.
-   - **Потеря параметров при рестарте:** `config.toml` не содержал полей порогов и пути к модели, а `KeywordEngine::load` считывал только `std::env::var` без привязки к `config.toml`. После перезагрузки устройство сбрасывалось к нерабочим значениям.
+1. **Строгое изолирование микрофона (Strict Wake-Word Gating):**
+   - Микрофонный шлюз `InputGate` герметичен в фоновом режиме: аудиопоток из комнаты локально обрабатывается только алгоритмом сопоставления сэмплов Rustpotter в RAM. В облако не отправляется ни одного байта, пока совпадение с ключевым словом не превысит калиброванный порог.
+   - Устранена проблема глухоты после 1–2 срабатываний: по умолчанию установлены калиброванные пороги (`threshold = 0.38`, `avg_threshold = 0.19`, `min_scores = 4`, `eager = true`), точно соответствующие длине сложных слов («штучкаинтелект»).
 
-2. **Внедрённые исправления:**
-   - **Синхронизация с `config.toml` (`src/web/mod.rs`):** Модуль `update_config_wakeword_settings` теперь гарантированно записывает в секцию `[assistant]` файла `config.toml`:
-     - `wakeword_model = "/data/opt/mini-assistant/keyword.rpw"`
-     - `wakeword_threshold = 0.38`
-     - `wakeword_avg_threshold = 0.19`
-     - `wakeword_min_scores = 4`
-     - `wakeword_eager = true`
-     - `wakeword_score_mode = "max"`
-     - `vad_threshold = 45.0`
-   - **Загрузка конфигурации с приоритетом (`src/wakeword/keyword.rs`):** `KeywordEngine::load_with_config` теперь загружает параметры в строгом приоритете: `ENV > config.toml > калиброванные дефолты`.
-   - **Eager Mode в vendor-библиотеке Rustpotter:** В `PersonalDetectorConfig` добавлено поле `eager: true`, обеспечивающее мгновенную активацию при совпадении `min_scores` фреймов без ожидания пост-тишины.
-   - **Поддержка горячего релоада и рестарта:** `main.rs` использует канонический путь `/data/opt/mini-assistant/keyword.rpw` и передаёт `config.assistant` в детектор как при старте, так и при hot-reload через Web UI.
+2. **Интерактивная панель калибровки в Web UI (`http://10.77.0.111:8080/`):**
+   - Добавлена карточка «🎛️ Чувствительность и калибровка звука» с интерактивными ползунками и переключателями:
+     - **Порог отклика Wake-Word (`threshold`):** 15–75% (пиковая схожесть с образцами).
+     - **Порог плотности фразы (`avg_threshold`):** 8–45% (средняя плотность совпадения по всей длине слова).
+     - **Отсечка шумов помещения (VAD, `vad_threshold`):** 20–90 RMS (порог тишины микрофона).
+     - **Кадров подтверждения (`min_scores`):** 1–8 кадров (длительность совпадения для срабатывания).
+     - **Стратегия совпадения (`score_mode`):** `Max` (по лучшему из 8 записанных тембров — для распознавания сонного/бодрого голоса) или `Avg` (по среднему).
+     - **Мгновенный триггер (`eager`):** срабатывание без ожидания паузы тишины.
+     - **Аппаратное выравнивание усиления (`gain_normalizer`):** адаптивная нормализация уровня громкости.
+     - **Полосовой фильтр частот речи (`band_pass`):** 200–4000 Гц для среза бытового гула.
+     - Кнопка «💾 Сохранить и применить» и кнопка «🔄 По умолчанию».
 
-3. **Верификация на устройстве:**
+3. **Бесшовный Hot-Reload и персистентность в `config.toml`:**
+   - Эндпоинты `GET /api/v1/calibration` и `POST /api/v1/calibration`.
+   - Любое изменение параметров мгновенно передаётся через канал `mpsc` в работающий аудиоцикл `InputGate` без перезапуска ассистента и без разрыва аудиопотока.
+   - Все параметры автоматически сохраняются в секции `[wakeword]` файла `config.toml` и сохраняются при перезагрузках колонки.
+
+4. **Аппаратная верификация на устройстве:**
    - 214 модульных тестов `cargo test --lib`: PASS (0 FAIL).
-   - Вызов `/api/v1/wakeword/rename` атомарно синхронизировал все 7 параметров в `/data/opt/mini-assistant/config.toml`.
-   - Полный рестарт демона через `/etc/init.d/S99mini_assistant restart` подтвердил корректную загрузку из `config.toml`:
-     `INFO mini_assistant::wakeword::keyword: Loaded personal wake-word detector with calibrated parameters threshold=0.38 avg_threshold=0.19 min_scores=4 eager=true score_mode=Max`.
    - `verify_deploy.sh`: 21 PASS, 0 FAIL.
+   - Тестирование API: вызов `POST /api/v1/calibration` вернул HTTP 200 OK.
+   - Журнал `assistant.log`:
+     `INFO mini_assistant::web: Persisted updated wakeword calibration to "/data/opt/mini-assistant/config.toml"`
+     `INFO mini_assistant::web: Dispatched hot calibration update to InputGate`
+     `INFO mini_assistant::wakeword::keyword: Hot-updated personal wake-word detector calibration threshold=0.38 avg_threshold=0.19 min_scores=4 cfg.score_mode=Max eager=true`
+     `INFO mini_assistant::wakeword::keyword: Wake-word detected! Opening voice pipeline name=актриса score=0.413 avg_score=0.221 counter=4` (turn opened, chime, TTS response, clean completion).
 
 ---
 
