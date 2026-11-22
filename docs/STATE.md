@@ -1,3 +1,23 @@
+# 22.11.2026 — Автономная калибровка: Этап 2 (исправление shadow и независимое наблюдение) выполнен
+
+Завершён **Этап 2** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (F1, независимое PCM-наблюдение и события):
+- **mini-assistant (коммит `0a26b8f`):**
+  - **F1 (Исправление сброса shadow-буфера на чанках):** Убран вызов `gate.reset_gate()` на каждом 32-мс чанке в `shadow_mode`. Сброс гейта выполняется только при наступлении подтверждённого события детекции (`!was_active && now_active`), благодаря чему история MFCC-окон и траектории DTW сохраняются до момента совпадения слова.
+  - **Изоляция аудиоцикла от облачного провайдера:** Устранена блокировка микрофонного цикла на ожидании `rx_session_status.await`. Статус сессии инициализируется при запуске и обновляется асинхронно; переход облачного клиента в состояние `Stopped` или обрыв соединения больше не прерывает работу KWS, VAD и лаборатории.
+  - **Режим тестовой сессии (`test_session`):** Реализована поддержка тестовой сессии через `set_test_session(bool)` и маршрут `POST /api/v1/acoustics/test_session`. Переход в сессию отзывает активный диалоговый ход, сбрасывает устаревшие кадры и блокирует вызовы облака, воспроизведение chime и ducking музыки.
+  - **Потоковый журнал событий (`AcousticEvent`):** Создан кольцевой буфер событий с точной временной привязкой (`sequence`, `sample_offset`, `timestamp_ms`, `applied_revision`, `score`, `avg_score`, `raw_detected`, `gate_opened`, `suppression_reason`). Реализован курсорный API-эндпоинт `GET /api/v1/acoustics/events?since={seq}&limit={n}` и расширен `Snapshot.recent_events`.
+  - **Ворота качества (Gate Verification):** Реализованы тесты `test_gate_criteria_shadow_preserves_history_and_matches_normal_mode` и `test_cloud_stopped_does_not_block_local_shadow_observation`. Доказано полное совпадение сырых детекций (`keyword_count`) на непрерывном PCM между shadow и normal режимами, полное отсутствие передачи аудио в облачный транспорт и открытие 0 ходов в shadow-режиме.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (227 lib + 13 acoustics::tests + 9 keyword_enroll + 236 bin = 485 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (30/30 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 3](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-3--ввести-ограниченный-доступ-и-управление-сессией) — ограниченный доступ (calibration identity), проверка scopes/lease и защита от административных вызовов.
+
+---
+
 # 22.11.2026 — Автономная калибровка: Этап 1 (исправление контракта настроек и интерфейса) выполнен
 
 Завершён **Этап 1** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (F2, F3, F5–F9):

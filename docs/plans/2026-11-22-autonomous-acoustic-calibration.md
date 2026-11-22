@@ -136,14 +136,14 @@ flowchart LR
 
 ### Этап 2 · Исправить shadow и выделить независимое наблюдение (F1)
 
-- [ ] Убрать reset на каждом чанке, сохранить MFCC/DTW-историю до события.
-- [ ] Вынести PCM observation/test dispatch из жизненного цикла облачного
+- [x] Убрать reset на каждом чанке, сохранить MFCC/DTW-историю до события.
+- [x] Вынести PCM observation/test dispatch из жизненного цикла облачного
   клиента. `Stopped`, reconnect и недоступный провайдер не блокируют лабораторию.
-- [ ] Подключить режим наблюдения к production matcher/preprocessing. Отдельно
+- [x] Подключить режим наблюдения к production matcher/preprocessing. Отдельно
   учитывать raw detection и итоговое решение gate с причиной подавления.
-- [ ] Включение тестовой сессии отзывает старый turn, блокирует stale queued
+- [x] Включение тестовой сессии отзывает старый turn, блокирует stale queued
   PCM/tool calls, исключает chime/ducking от контрольных обращений.
-- [ ] Выдать события с sample offsets/sequence и snapshot конфигурации;
+- [x] Выдать события с sample offsets/sequence и snapshot конфигурации;
   cumulative counters остаются обзором, а не метрикой качества испытания.
 
 **Ворота:** один непрерывный PCM даёт сопоставимые raw detections в shadow и
