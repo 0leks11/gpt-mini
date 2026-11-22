@@ -1,3 +1,52 @@
+# 23.11.2026 — Автономная калибровка: Этап 8 (Acoustic UI, сессии, OpenAPI 3.1 и scripted MCP-клиент) выполнен
+
+Завершён **Этап 8** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (управление сессиями с защитой от сбоев `recovery_session.json`, публикация спецификации OpenAPI 3.1 / JSON Schema, проверка дрейфа схем в CI, обновлённый веб-интерфейс Acoustic UI с прослушиванием WAV и проверкой capabilities, MCP stdio-адаптер с поддержкой сессий и сквозная автоматическая верификация через REST и MCP-клиенты):
+- **mini-assistant (коммит `596f7db`):**
+  - **Менеджер калибровочных сессий (`src/acoustics/sessions.rs`):**
+    - Введены структуры `AcousticSessionManager`, `AcousticSession`, `SessionState` (`Running`, `AwaitingOwner`, `Completed`, `Cancelled`, `Expired`), `SessionBounds` (ограничения `max_duration_secs` до 7200 с и `max_jobs` до 50).
+    - Файл аварийного восстановления на диске (`recovery_session.json`): при старте демона проверяется наличие незавершённой сессии для безопасного отката к baseline. Штатное завершение или отмена сессии атомарно удаляет файл.
+    - Взаимное исключение параллельных сессий с возвратом `409 Conflict`.
+  - **Спецификация OpenAPI 3.1 (`src/acoustics/openapi.rs`):**
+    - Генератор `generate_openapi_spec()` создаёт валидный JSON Schema / OpenAPI 3.1 документ для всех операций `/api/v1/acoustics/*`.
+  - **Идемпотентность измерительных заданий (`src/acoustics/jobs.rs`):**
+    - Поддержка заголовка `Idempotency-Key`: повторные запросы с тем же ключом не запускают повторный звук в комнате, а сразу возвращают исходный `JobSummary`.
+  - **Применение кандидатов в RAM без дискового IO (`src/acoustics.rs`):**
+    - Добавлены `apply_candidate_in_memory` и `apply_config_in_memory` в `AcousticLab` для временного переключения аудио-контура с подтверждением по каналу ACK без перезаписи `config.toml`.
+  - **Маршрутизация и авторизация (`src/web/mod.rs`, `src/web/auth.rs`):**
+    - Добавлены эндпоинты:
+      - `GET /api/v1/acoustics/schema` и `GET /api/v1/acoustics/openapi.json` — спецификация API.
+      - `POST /api/v1/acoustics/sessions` — создание ограниченной сессии.
+      - `GET /api/v1/acoustics/sessions` и `GET /api/v1/acoustics/sessions/{id}` — статус сессии.
+      - `POST /api/v1/acoustics/sessions/{id}/candidate` — применение кандидата в RAM.
+      - `POST /api/v1/acoustics/sessions/{id}/restore` — возврат baseline-настроек.
+      - `POST /api/v1/acoustics/sessions/{id}/confirm_owner` — подтверждение живого контроля владельцем.
+      - `POST /api/v1/acoustics/sessions/{id}/finish` — завершение сессии с опциональным сохранением и активацией профиля.
+      - `POST /api/v1/acoustics/sessions/{id}/cancel` — досрочная отмена сессии.
+      - `GET /api/v1/acoustics/samples/{id}/audio` — стриминг WAV для браузерного прослушивания.
+    - Настроена матрица прав в `src/web/auth.rs` для сессионных маршрутов.
+  - **Acoustic UI (`src/web/acoustic_lab.html`):**
+    - Добавлены секции: сессии калибровки с таймером и счетчиком заданий; библиотека сэмплов с HTML5 `<audio controls>` плеером; селекторы стимулов и маршрутов с автоматическим отключением (`disabled`) AUX при отсутствии разъёма на Mini; баннер живого контроля владельца («Нужен живой контроль»); панели запуска заданий, оценки KWS и поиска кандидатов.
+  - **MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Добавлены инструменты: `get_openapi_schema`, `get_acoustic_sample_audio`, `create_acoustic_session`, `get_acoustic_session`, `apply_session_candidate`, `restore_session_baseline`, `confirm_session_owner`, `finish_acoustic_session`, `cancel_acoustic_session`.
+    - Добавлена поддержка `idempotency_key` в `start_acoustic_job`.
+    - Синхронизирована копия скрипта в корне репозитория.
+  - **Сквозная верификация ворот (`tests/test_stage8_scripted_scenario.py`):**
+    - `test_01_schema_drift`: верификация отсутствия дрейфа между каталогом инструментов MCP и OpenAPI 3.1.
+    - `test_02_scripted_rest_client_scenario`: полный калибровочный сценарий без браузера через REST API (сессия, сэмплы, аудио-поток, RAM-кандидат, идемпотентное задание, отчёт, оценка, подтверждение владельца, сохранение и активация профиля).
+    - `test_03_scripted_mcp_client_scenario`: выполнение того же сценария через JSON-RPC stdio протокол MCP-клиента.
+  - **Интеграционный тест сервера (`src/web/mod.rs`):**
+    - `test_http_acoustic_sessions_and_openapi_lifecycle`: проверка HTTP-обработчиков сессий, 409 Conflict при повторном открытии, применения в RAM и OpenAPI схемы.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (543 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (34/34 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 9](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-9--общая-приёмка-и-релиз) — общая приёмка и релиз (ARM32 сборка, verify_deploy на устройство GPT Mini, натурные измерения KWS на 2 м и оформление релизной документации).
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 7 (отчёт измерения, фильтрация сбоев и подбор параметров) выполнен
 
 Завершён **Этап 7** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (структурированный `JobReport`, фильтрация технических сбоев `is_valid: false`, анализ затухания тракта < 8 кГц, оценщик KWS-корпуса `AcousticEvaluator`, bounded coordinate search `AcousticSearcher` с многокритериальным ранжированием кандидатов, Web REST endpoints и MCP-инструменты):
