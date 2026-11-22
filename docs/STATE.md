@@ -1,3 +1,34 @@
+# Релиз 22.11 (v2) — Персистентность калиброванных порогов Wake-Word в config.toml при перезагрузке
+
+На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) развёрнуто исправление сброса параметров детектора и обеспечено 100% сохранение сигнатур и порогов в конфигурационном файле перезагрузки `config.toml` (коммит `7a43376` в `mini-assistant`, бинарник `ba3890d1...` 3.5 МБ, `verify_deploy.sh` 21/21 PASS):
+
+1. **Диагностика и первопричина сбоя («срабатывает 1–2 раза и замолкает»):**
+   - **Недостижимый порог среднего (`avg_threshold`):** При естественном произнесении пиковый скор достигает `0.60–0.64`, но средний по окну (`avg_score`) для длинных слов составляет `0.22–0.26`. Дефолтный `avg_threshold = 0.28` (и старый в кодовой базе `0.34`) отбрасывал подавляющее большинство вызовов, пропуская лишь единичные всплески.
+   - **Задержка тишины (`eager = false`):** Rustpotter ожидал 1.5 секунды абсолютной тишины после ключевого слова (`countdown == 0`) перед подтверждением детекции. При слитной речи с командой детекция сбрасывалась.
+   - **Потеря параметров при рестарте:** `config.toml` не содержал полей порогов и пути к модели, а `KeywordEngine::load` считывал только `std::env::var` без привязки к `config.toml`. После перезагрузки устройство сбрасывалось к нерабочим значениям.
+
+2. **Внедрённые исправления:**
+   - **Синхронизация с `config.toml` (`src/web/mod.rs`):** Модуль `update_config_wakeword_settings` теперь гарантированно записывает в секцию `[assistant]` файла `config.toml`:
+     - `wakeword_model = "/data/opt/mini-assistant/keyword.rpw"`
+     - `wakeword_threshold = 0.38`
+     - `wakeword_avg_threshold = 0.19`
+     - `wakeword_min_scores = 4`
+     - `wakeword_eager = true`
+     - `wakeword_score_mode = "max"`
+     - `vad_threshold = 45.0`
+   - **Загрузка конфигурации с приоритетом (`src/wakeword/keyword.rs`):** `KeywordEngine::load_with_config` теперь загружает параметры в строгом приоритете: `ENV > config.toml > калиброванные дефолты`.
+   - **Eager Mode в vendor-библиотеке Rustpotter:** В `PersonalDetectorConfig` добавлено поле `eager: true`, обеспечивающее мгновенную активацию при совпадении `min_scores` фреймов без ожидания пост-тишины.
+   - **Поддержка горячего релоада и рестарта:** `main.rs` использует канонический путь `/data/opt/mini-assistant/keyword.rpw` и передаёт `config.assistant` в детектор как при старте, так и при hot-reload через Web UI.
+
+3. **Верификация на устройстве:**
+   - 214 модульных тестов `cargo test --lib`: PASS (0 FAIL).
+   - Вызов `/api/v1/wakeword/rename` атомарно синхронизировал все 7 параметров в `/data/opt/mini-assistant/config.toml`.
+   - Полный рестарт демона через `/etc/init.d/S99mini_assistant restart` подтвердил корректную загрузку из `config.toml`:
+     `INFO mini_assistant::wakeword::keyword: Loaded personal wake-word detector with calibrated parameters threshold=0.38 avg_threshold=0.19 min_scores=4 eager=true score_mode=Max`.
+   - `verify_deploy.sh`: 21 PASS, 0 FAIL.
+
+---
+
 # Релиз 22.11 — Устранение регрессии записи сэмплов Wake-Word через микрофон колонки
 
 На физическом устройстве **GPT Mini** (`10.77.0.111:2222`) развёрнуто исправление аудиопайплайна и подсистемы обучения Wake-Word (коммит `7076b00` в `mini-assistant`, бинарник `9be016d6...` 3.5 МБ, `verify_deploy.sh` 22/22 PASS):
