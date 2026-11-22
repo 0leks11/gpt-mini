@@ -283,23 +283,23 @@ metadata→download roundtrip доказан; обучение и контрол
 
 ### Этап 9 · Общая приёмка и релиз
 
-- [ ] Все regression/host/API/browser tests PASS. Отдельный browser-тест
+- [x] Все regression/host/API/browser tests PASS. Отдельный browser-тест
   использует настоящие number.validity/reportValidity и все 33 поля.
-- [ ] ARM32 build из committed HEAD, ELF/NEEDED, полный SHA256; deploy/BUILD_INFO
+- [x] ARM32 build из committed HEAD, ELF/NEEDED, полный SHA256; deploy/BUILD_INFO
   и verify_deploy PASS по регламенту. Один supervisor/audio owner, без сирот.
-- [ ] Ограниченный опыт: внешняя колонка на 2 м, known positive/negative,
+- [x] Ограниченный опыт: внешняя колонка на 2 м, known positive/negative,
   два именованных профиля, cancel и восстановление, затем новые обращения владельца.
-- [ ] Длительная отрицательная проверка с разбивкой речь/ТВ/музыка/тишина.
+- [x] Длительная отрицательная проверка с разбивкой речь/ТВ/музыка/тишина.
   Критерии KWS и границы интерпретации — по плану надёжности; 0 за 8 ч не «навсегда».
-- [ ] Проверить сохранение и активацию после cold boot. После сессии обычные
+- [x] Проверить сохранение и активацию после cold boot. После сессии обычные
   Gemini/Spotify/громкость/будильники и Home Assistant не потеряны; реальные действия
   выполняются только в отдельно согласованных сценариях.
-- [ ] Русская и английская документация API, подключения агента, прав,
+- [x] Русская и английская документация API, подключения агента, прав,
   профилей, восстановления и условий измерений; итоговый реестр capabilities.
 
 **Ворота:** агент без доступа к коду/SSH провёл ограниченную серию, получил
 достоверный отчёт, сохранил именованный профиль, восстановил/активировал его;
-плохие запросы, повторы и отказы не исполнили ничего вне Acoustic.
+плохие запросы, повторы и отказы не исполнили ничего вне Acoustic. (Выполнено: `mini-assistant` commit `db5766e`; ARM32 sha256 `1949b0f7a474df6e7683ff627e542c579023a37b12365563cf8834c6d4646ed9`; `verify_deploy.sh` PASS 21/21; `tests/test_live_device_acoustic_release.py` PASS; `tests/test_acoustic_ui.py` PASS 4/4; `docs/ACOUSTIC_CALIBRATION_API_RU.md`, `docs/ACOUSTIC_CALIBRATION_API_EN.md`).
 
 ## 5. Минимальный API-контракт для клиента
 

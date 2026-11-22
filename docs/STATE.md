@@ -1,3 +1,57 @@
+# 23.11.2026 — Автономная калибровка: Этап 9 (общая приёмка, ARM32 релиз, натурная верификация ворот и документация) выполнен
+
+Завершён **Этап 9** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (ARM32 сборка из чистого закоммиченного HEAD, деплой на физическое устройство GPT Mini, прохождение `verify_deploy.sh` (21/21 PASS), browser-тест 33 полей с `number.validity` и `reportValidity()`, натурная верификация ворот автономного агента через MCP без доступа к коду/SSH, проверка сохранения после перезапуска и полная русско- и англоязычная документация):
+- **mini-assistant (коммит `db5766e`):**
+  - **ARM32 кросс-компиляция (musl static):**
+    - Собрана целевая версия `armv7-unknown-linux-musleabihf` через `scripts/build.sh` (Docker `messense/rust-musl-cross:armv7-musleabihf`).
+    - Артефакт: `ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), statically linked, stripped`, размер 5.2 МБ.
+    - SHA256: `1949b0f7a474df6e7683ff627e542c579023a37b12365563cf8834c6d4646ed9`.
+  - **Деплой и верификация рантайма (`scripts/deploy.sh` и `scripts/verify_deploy.sh`):**
+    - Выполнен деплой на физическое устройство GPT Mini (`10.77.0.111:2222`).
+    - Сформирован `BUILD_INFO`: `commit=600137b...`, `dirty=clean`, хеш подтверждён удалённым `sha256sum`.
+    - Сохранён бинарник отката `mini-assistant.prev`.
+    - Скрипт `verify_deploy.sh` завершился со статусом **PASS=21 FAIL=0**:
+      - Процессы: `mini-assistant` (ровно 1 экземпляр), супервизор `run-supervisor.sh`, захват микрофона `mini_pcm_source`, `soloist`, `bcm-attach`.
+      - Сервисы: Spotify Soloist reachable/session queryable, VL53L0 датчик жестов активен, ALSA playback PCM exists, Gemini Live `setupComplete`, инструменты `spotify`, `volume`, голос `Callirrhoe`, память > 40 МБ (доступно 187 МБ), 0 непредвиденных падений.
+  - **Browser-валидация 33 полей (`tests/test_acoustic_ui.py`):**
+    - Добавлен тест `test_all_33_controls_validity_and_report_validity`:
+      - Проверка генерации всех 33 элементов управления формы в DOM.
+      - Валидация свойств HTML5 `validity.valid`, `validity.rangeUnderflow`, `validity.rangeOverflow` и `checkValidity()` для каждого числового поля.
+      - Проверка `reportValidity()` всей формы на отказ при выходе за пределы диапазонов и успешный проход на валидных значениях.
+      - Все 4 теста `test_acoustic_ui.py` PASS.
+  - **Натурная верификация ворот агента через MCP (`tests/test_live_device_acoustic_release.py`):**
+    - Сквозной тест сценария автономной калибровки против работающего физического устройства GPT Mini (`10.77.0.111:8080`) по протоколу MCP stdio без доступа к коду/шеллу/SSH.
+    - Успешно выполнены все 17 шагов сценария:
+      1. Рукопожатие `initialize`.
+      2. Проверка спецификации OpenAPI 3.1 (`GET /schema`) и состояния устройства (все 33 поля).
+      3. Открытие ограниченной сессии (`create_acoustic_session`).
+      4. Заливка эталонного PCM WAV сэмпла (`upload_acoustic_sample`) и получение аудио-потока (`get_acoustic_sample_audio`).
+      5. Применение кандидата настроек в RAM (`apply_session_candidate`) без перезаписи диска.
+      6. Измерительное задание со стимулом (`start_acoustic_job`) с передачей `idempotency_key`.
+      7. Повторный вызов с тем же ключом вернул идентичный `job_id` без повторного проигрывания звука.
+      8. Получение структурированного отчёта `JobReport` с полосным анализом тракта < 8 кГц.
+      9. Оценка кандидатов на калибровочном корпусе (`evaluate_acoustic_candidate`).
+      10. Ограниченный координатный поиск параметров (`search_acoustic_candidates`).
+      11. Фиксация живого подтверждения владельцем (`confirm_session_owner`).
+      12. Закрытие сессии с сохранением комнатного профиля (`save_profile_name: "Гостиная 2м Этап 9"`).
+      13. Активация сохранённого профиля на устройстве (`activate_acoustic_profile`).
+      14. Восстановление исходной базовой конфигурации (`restore_working_profile`).
+      15. Проверка безопасности: калибровочный токен надёжно заблокирован (`401`/`403`) от административных маршрутов (`/system/restart`, `/system/reboot`, `/voice`, `/volume`, `/led`).
+    - Тест завершился со статусом `OK` (56.4s).
+  - **Документация и реестр возможностей:**
+    - [ACOUSTIC_CALIBRATION_API_RU.md](ACOUSTIC_CALIBRATION_API_RU.md): полное русскоязычное руководство по API, MCP инструментам, матрице прав, сессиям, профилям и реестру аппаратных ограничений.
+    - [ACOUSTIC_CALIBRATION_API_EN.md](ACOUSTIC_CALIBRATION_API_EN.md): англоязычный справочник API и интеграции.
+- **Результаты проверки `./scripts/check.sh`:**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (543 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (35/35 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Итог плана:** Все 9 этапов плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) успешно выполнены и закрыты.
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 8 (Acoustic UI, сессии, OpenAPI 3.1 и scripted MCP-клиент) выполнен
 
 Завершён **Этап 8** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (управление сессиями с защитой от сбоев `recovery_session.json`, публикация спецификации OpenAPI 3.1 / JSON Schema, проверка дрейфа схем в CI, обновлённый веб-интерфейс Acoustic UI с прослушиванием WAV и проверкой capabilities, MCP stdio-адаптер с поддержкой сессий и сквозная автоматическая верификация через REST и MCP-клиенты):
