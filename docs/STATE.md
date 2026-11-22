@@ -1,3 +1,44 @@
+# 23.11.2026 — Автономная калибровка: Этап 5 (библиотека записей, WAV-валидация и изоляция сплитов) выполнен
+
+Завершён **Этап 5** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (библиотека контрольных записей, валидация mono PCM16 16 кГц WAV, устранение переполнения i16::MIN, метрики клиппинга/SNR и изоляция сплитов):
+- **mini-assistant (коммит `049c9a5`):**
+  - **Библиотека записей и валидатор аудио (`src/acoustics/samples.rs`):**
+    - Введены структуры `SampleSource` (`upload`, `recorded`, `synthetic`), `SampleLabel` (`positive`, `negative`, `own_output`, `ambient`), `SampleSplit` (`train`, `calibration`, `held_out`), `SampleInterval`, `SampleAudioMetrics`, `SampleMetadata`.
+    - Реализована строгая валидация WAV (`validate_and_analyze_wav`): допускается исключительно моно PCM16 WAV с частотой 16 000 Гц и длительностью до 60 с (лимит размера ~1.92 MB PCM). Стерео, многоканальный звук, другие частоты дискретизации (44.1/48 кГц), усечённые и повреждённые файлы строго отклоняются.
+    - Реализован расчёт метрик: RMS-уровень, амплитуда пика, точный SNR на основе разметки речевого интервала и фонового шума.
+    - Устранено переполнение целых чисел и паника в debug-режиме при обработке граничного значения `i16::MIN` (-32768) через безопасное приведение к `i32` и `saturating_abs()`, с корректной детекцией цифрового клиппинга (`is_clipped = true`).
+    - Реализована самодостаточная реализация FIPS 180-4 SHA-256 (`compute_sha256_hex`) без внешних зависимостей.
+    - Реализовано хранилище `SamplesStore` с атомарным сохранением индекса (`index.json`), доступом строго по уникальным идентификаторам (`smp_<uuid>`), блокировкой path traversal (`validate_sample_id`) и гарантированной изоляцией обучающей и контрольной выборок: `get_dataset_split(Train)` ни при каких условиях не выдаёт сэмплы из сплита `HeldOut`.
+  - **Исправление багов захвата и энроллмента (`src/wakeword/enrollment.rs` и `src/alarms/sound.rs`):**
+    - Заменены потенциально переполняющиеся вызовы `s.abs()` на `(s as i32).abs()` и `s.saturating_abs()`.
+    - Добавлен юнит-тест `test_process_sample_i16_min_no_panic_and_detects_clipping`.
+  - **Интеграция в Web REST API (`src/web/mod.rs` и `src/web/auth.rs`):**
+    - Добавлены эндпоинты:
+      - `GET /api/v1/acoustics/samples` (список с фильтрами по `split`, `label`, `include_archived`).
+      - `POST /api/v1/acoustics/samples` (загрузка через JSON base64 или бинарный `audio/wav`).
+      - `GET /api/v1/acoustics/samples/{id}` (получение метаданных и метрик сэмпла).
+      - `GET /api/v1/acoustics/samples/{id}/wav` (потоковая отдача аудиофайла `audio/wav`).
+      - `PUT /api/v1/acoustics/samples/{id}` (обновление имени, разметки, сплита, интервала и заметок).
+      - `POST /api/v1/acoustics/samples/{id}/archive` (архивирование сэмпла).
+      - `DELETE /api/v1/acoustics/samples/{id}` (полное удаление файла и метаданных).
+    - В `src/web/auth.rs` добавлена авторизация маршрутов с проверкой скоупов `Scope::Samples` и `Scope::AcousticsRead`.
+  - **MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`):**
+    - Добавлены инструменты: `list_samples`, `get_sample`, `upload_sample`, `update_sample`, `archive_sample`, `delete_sample`.
+  - **Тестирование и верификация ворот:**
+    - Реализован интеграционный HTTP-тест `test_http_samples_lifecycle_and_validation` (загрузка base64, скачивание байт-в-байт, обновление, отклонение стерео, клиппинг i16::MIN, удаление, 401 Unauthorized).
+    - Юнит-тесты хранилища и валидатора в `src/acoustics/samples.rs` (WAV spec, duration limit, truncation, i16::MIN, split isolation, SHA-256).
+    - Юнит-тест MCP-адаптера в `tests/test_mcp_acoustic_agent.py`.
+- **Результаты проверки (`scripts/check.sh`):**
+  - `format`: PASS (exit=0)
+  - `lint` (Clippy `-D warnings`): PASS (exit=0)
+  - `rust` (cargo test): PASS (500 tests, exit=0)
+  - `vendor` (rustpotter-ref): PASS (exit=0)
+  - `python` (test_*.py): PASS (31/31 tests, exit=0)
+  - Итог: 5/5 stages PASS.
+- **Следующий шаг:** [Этап 6](plans/2026-11-22-autonomous-acoustic-calibration.md#этап-6--исполнитель-звуковых-опытов-включая-внешний-динамик-на-2-м) — исполнитель звуковых опытов (раннер заданий с `test_id`, stimulus origin, очередь и синхронизация capture/playback).
+
+---
+
 # 23.11.2026 — Автономная калибровка: Этап 4 (профили помещений и временные кандидаты) выполнен
 
 Завершён **Этап 4** плана [автономной акустической калибровки](plans/2026-11-22-autonomous-acoustic-calibration.md) (профили помещений, статусы, атомарное хранилище и предпросмотр кандидатов с TTL):
