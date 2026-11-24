@@ -49,6 +49,7 @@ omp-telegram-collab/
 tg agent/
 
 # Generated artifacts, recordings, network captures, firmware and models.
+.hillclimb/
 target/
 node_modules/
 *.log
