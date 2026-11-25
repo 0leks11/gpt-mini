@@ -1,3 +1,33 @@
+# 26.11.2026 — Фаза 6 M-AEC завершена: 2D Waterfall Web UI, 6-band ERLE, `/samples/{id}/spectrogram` и hardening деплоя (`57f86c1`)
+
+## Выполненные изменения (`mini-assistant`)
+
+1. **`303c00a` — Надёжность деплоя и проверки процесса (`scripts/deploy.sh`, `scripts/verify_deploy.sh`, `tests/test_deploy.py`):**
+   - В `scripts/deploy.sh` перезапуск супервизора (`RESTART=1`) включён по умолчанию (отказ через `--no-restart`), чтобы старый бинарник не оставался работать в RAM со статусом `(deleted)`.
+   - В `scripts/verify_deploy.sh` добавлена проверка `/proc/<pid>/exe` на `(deleted)` — устаревший процесс в памяти теперь даёт `FAIL`.
+   - Тесты `tests/test_deploy.py` расширены кейсом `test_restart_enabled_by_default_and_no_restart_opts_out` (14 тестов OK).
+
+2. **`57f86c1` — Спектрограммы M-AEC и образцов без дополнительных FFT:**
+   - **Спектральная телеметрия M-AEC (`src/audio/aec/res.rs`, `src/audio/aec/mdf.rs`, `src/audio/aec/mod.rs`):** из уже вычисленных БПФ (`e_freq`, `d_hat_freq`, активные веса `ResidualEchoSuppressor::active_gains`) добавлены `AecBandErle` (`sub_bass`, `low_mid`, `mid`, `presence`, `brilliance`, `full`) и 32-полосные спектры `0–8000 Hz` (`spectrum_before_db`, `spectrum_after_db`, шаг `250 Hz`), публикуемые через lock-free атомики `SharedAecTelemetry`.
+   - **Спектрограммы сохранённых записей (`src/acoustics/samples.rs`, `src/web/mod.rs`, `src/acoustics/openapi.rs`, `scripts/mcp_acoustic_agent.py`):** добавлен расчёт 32-полосной STFT-спектрограммы и 6-диапазонного профиля (`SampleSpectrogram`, `compute_sample_spectrogram_from_wav`), маршрут `GET /api/v1/acoustics/samples/{id}/spectrogram`, OpenAPI-операция `get_sample_spectrogram` и MCP-инструмент `get_sample_spectrogram` (синхронизировано в корневой `scripts/mcp_acoustic_agent.py`).
+   - **Web UI (`src/web/acoustic_lab.html`):** добавлена карточка живых 2D Waterfall-спектрограмм (`#waterfall-before`, `#waterfall-after`) и 6 полос ERLE (`#band-erle-*`), а также просмотр спектрограмм сохранённых образцов по кнопке «Спектр» (`#sample-spectrogram-box`, `#sample-spec-canvas`).
+
+## Проверки, деплой и живая верификация (`57f86c1`)
+
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)**: `format` PASS, `lint` PASS, `rust` PASS (`274 lib + 3 bcm_attach + 9 keyword_enroll + 283 main + 6 aec_synthetic_test = 575 passed`), `vendor` PASS, `python` (`Ran 40 tests, OK (skipped=1)` — пропущен opt-in live test `test_live_mcp_calibration_scenario_and_gate_verification`).
+- **ARM32 релиз:** `armv7-unknown-linux-musleabihf`, `4.4M`, SHA256 `08df5d1bc7c0f48797fb20bae6f74294f5e0ab855e2229f65e8036fe84b031e8`, тег `release/2026-11-26-57f86c1`.
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`BUILD_INFO = 57f86c1c44cf6bbcd4510d30ae90035a6f49be6b`, процесс активен без `(deleted)`, `available=161604 kB` RAM).
+- **Живые HTTP-проверки на `10.77.0.111:8080`:**
+  - `GET /api/v1/status` (`200`): `volume=1`, Soloist не воспроизводит музыку.
+  - `GET /acoustics` (`200`): присутствуют элементы `waterfall-before`, `waterfall-after`, `band-erle-sub_bass`, `sample-spectrogram-box`, `loadSampleSpectrogram`.
+  - `GET /api/v1/acoustics/openapi.json` (`200`): путь `/samples/{id}/spectrogram` зарегистрирован.
+  - `GET /api/v1/acoustics` (`200`): `aec.enabled=true`, `dtd_status=MUTED`, `blocks_processed=4683`, `band_erle_db`, 32-элементные массивы `spectrum_before_db` и `spectrum_after_db`.
+  - `GET /api/v1/acoustics/aec` и `POST /api/v1/acoustics/samples` без токена возвращают `401 Unauthorized` (авторизация калибровки активна).
+- **CPU на устройстве:** по `/proc/<pid>/stat` за 2 с в idle общий процесс `mini-assistant` (KWS + M-AEC + WebUI + Gemini Live) занимает `14.88%` по 4 ядрам (`59.50%` 1 ядра); телеметрия Фазы 6 не добавляет ни одного лишнего FFT.
+- **Ограничения и следующий шаг:** живой `/samples/{id}/spectrogram` с аутентификацией покрыт локальными HTTP-интеграционными и MCP-тестами (на устройстве запрос `POST /samples` без calibration-токена отклонён с `401`); остаётся только добровольный натурный тест barge-in / повышенной громкости (Фаза 5) по отдельной команде пользователя.
+
+---
+
 # 26.11.2026 — Фикс ducking-кривой + Фаза 6 M-AEC: живая телеметрия, REST/MCP API и Web UI (`f55a7ef`)
 
 ## Выполненные изменения (`mini-assistant`)
