@@ -1,3 +1,41 @@
+# 26.11.2026 — Фикс ducking-кривой + Фаза 6 M-AEC: живая телеметрия, REST/MCP API и Web UI (`f55a7ef`)
+
+## Выполненные изменения (`mini-assistant`)
+
+1. **`e8505a1` — Согласование `MusicDucker` с логарифмической кривой громкости (`src/spotify/ducking.rs`):**
+   - Исправлены оставшиеся вычисления `orig_pct`, `ducked_pct` и `start_pct` с `level * 10` на `volume::soloist_percent_for_level(...)`, чтобы приглушение с уровней $\ge 3$ сбрасывало громкость Soloist на `50%` (уровень 2) вместо беззвучных `20%`, а плавный возврат стартовал с того же значения.
+   - Добавлен модульный тест `test_ducking_uses_logarithmic_soloist_percentages`.
+
+2. **`f55a7ef` — Живая телеметрия M-AEC, API `/api/v1/acoustics/aec`, capabilities и Web UI:**
+   - **Lock-free телеметрия (`src/audio/aec/mod.rs`, `src/audio/aec/mdf.rs`, `src/audio/alsa_capture.rs`):** добавлен `SharedAecTelemetry` на атомиках (без мьютексов в аудиопотоке) с метриками `erle_db`, `mic_rms_dbfs`, `ref_rms_dbfs`, `err_rms_dbfs`, `double_talk_active`, `dtd_status` (`DISABLED`, `IDLE`, `MUTED`, `CONVERGING`, `ACTIVE`, `DOUBLE_TALK`), `blocks_processed`, `adapted_blocks` и живым переключателем `set_enabled()` без перезапуска захвата (включая корректный drain буфера `ref_chunk_buffer` в `Decimator` при выключенном AEC).
+   - **REST API и права (`src/web/mod.rs`, `src/web/auth.rs`, `src/acoustics.rs`, `src/acoustics/openapi.rs`):**
+     - `GET /api/v1/acoustics/aec` и `POST /api/v1/acoustics/aec` (для calibration-токена — только RAM; сохранение `[audio.aec].enabled` в `config.toml` через `save_aec_enabled()` разрешено только `Owner`).
+     - Обновлён реестр capabilities в `GET /api/v1/acoustics`: вместо устаревшего «Независимый программный AEC/NS не подключён» отображается актуальное состояние MDF PBFDAF + RES и текущий ERLE/DTD.
+     - В OpenAPI 3.1 добавлены операции `get_aec_telemetry` и `set_aec_state`; в MCP-клиент (`scripts/mcp_acoustic_agent.py`) добавлен инструмент `get_aec_telemetry`.
+   - **Web UI (`src/web/acoustic_lab.html`):** добавлен живой индикатор M-AEC (`dtd_status`, шкала ERLE 0–40 дБ, уровни Ref/Mic/Err dBFS и переключатель `M-AEC + RES включён`).
+
+## Проверки и деплой на устройство
+
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)**
+  - `format` PASS, `lint` (Clippy `-D warnings`) PASS, `rust` (273 lib + 3 `bcm_attach` + 9 `keyword_enroll` + 282 main + 6 `aec_synthetic_test` = 573 PASS), `vendor` PASS, `python` (39 ran, OK, 1 opt-in live test skipped).
+- **ARM32 релиз:** `armv7-unknown-linux-musleabihf` (`ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), statically linked, stripped`, `4.4M`), SHA256: `4ee32faee6187c31e2e40a0dbbc0f5171d9f4c451acc708f1f432bd3052e87b4`.
+- **Тег релиза:** `release/2026-11-26-f55a7ef` запушен в `origin`.
+- **Деплой и перезапуск (`deploy.sh --skip-build --restart`):**
+  - Выявлен нюанс инфра-скриптов: без `--restart` `deploy.sh` оставляет в памяти прежний процесс `(deleted)`, хотя `verify_deploy.sh` проверяет только SHA256 файла на диске (`PASS`). После запуска с `--restart` процесс обновлён до `f55a7ef`.
+- **`./scripts/verify_deploy.sh`:** **PASS=22 FAIL=0** (`BUILD_INFO` = `f55a7ef9204c19c7a1fd8321068ab0b214f58b06`, `dirty=clean`, `available=171292 kB` RAM).
+- **Проверка живых HTTP-эндпоинтов на `10.77.0.111:8080`:**
+  - `GET /api/v1/status`: `volume=1`, `spotify.volume_pct=42`, `wakeword.enabled=true` (`штучкаинтилект`), `voice=Callirrhoe`.
+  - `GET /api/v1/acoustics/aec`: `status=ok`, `enabled=true`, `dtd_status=MUTED` (референс `-120.0 dBFS`, тишина в комнате `-79.97 dBFS`), `blocks_processed=816`.
+  - `GET /api/v1/acoustics` и `/openapi.json`: актуальные capabilities, блок `aec` и схема `/aec` подтверждены.
+
+## Ограничения и следующий шаг
+
+- Живой акустический тест воспроизведения музыки на `volume=1` (`Soloist=42%`) с замером ERLE $\ge 25$ дБ и 10 контрольными barge-in вызовами в комнате **не запускался** в этом цикле (выполнять в согласованное время без несогласованного звука в помещении).
+- В Web UI добавлена живая телеметрия и переключатель M-AEC; веб-визуализация Waterfall-спектрограмм из `.hillclimb/spectrograms/` в UI остаётся опциональным шагом.
+- Отложенный фикс инфры: добавить `--restart` в usage и проверку `/proc/<pid>/exe` (отсутствие `(deleted)`) в `verify_deploy.sh`.
+
+---
+
 # 25.11.2026 — Hill-climb AEC: 30.11 dB ERLE + логарифмическая кривая громкости Soloist
 
 ## Результаты сессии
