@@ -1,3 +1,78 @@
+# 25.11.2026 — Hill-climb AEC: 30.11 dB ERLE + логарифмическая кривая громкости Soloist
+
+## Результаты сессии
+
+### AEC Hill-climb (итерации 000–011)
+
+| ID | ERLE steady | Статус | Коммит |
+|----|-------------|--------|--------|
+| 000_baseline | 11.57 dB | baseline | — |
+| 001_bulk_delay_16 | 20.95 dB | KEPT | `724001a` |
+| 005_mu075_eps002_psdfast | 28.43 dB | KEPT | `c5cff0c` |
+| 010_spectral_reg_dtd | 28.34 dB | KEPT | `170b803` |
+| **011_linear_dhat_res** | **31.97 dB** | **KEPT** | `73c8ee4` |
+
+Ключевое исправление: `d_hat_freq` ранее перезаписывался нулями после IFFT; перемещение `copy_from_slice` **до** IFFT дало +3.17 dB (26.95 → 30.11 dB).
+
+### Логарифмическая кривая громкости Soloist (`a994a95`)
+
+**Проблема:** При level=1, Soloist `10%` → Ch6 loopback ≈ 2 (noise floor) → AEC не имеет reference-сигнала → ERLE деградирует до ~20 dB.
+
+**Решение:** Таблица `[0,42,50,57,64,71,77,83,89,95,100]` для levels 0–10:
+- Level 1 → 42% → Ch6 ≈ 300-400 RMS → AEC ~28 dB ERLE
+- Level 10 → 100% (без изменений)
+
+Обновлены: `volume.rs`, `main.rs` (3 места), `web/mod.rs`, `vl53.rs`, `ducking.rs`.
+check.sh 5/5 PASS.
+
+### CPU профиль (на устройстве)
+- KWS (Rustpotter): 8.6% 1-core ≈ 2.15% 4-core — **основная нагрузка**
+- AEC (MDF): 9.1% 1-core ≈ 2.28% 4-core
+- Итого live: ~15.7% 4-core (mini-assistant + mini_pcm_source)
+- CPU governor: `interactive`, 1.2 GHz под нагрузкой
+
+### Деплой
+- Коммит: `73c8ee4` (AEC) + `a994a95` (volume) → деплой `a994a95`
+- Устройство: 10.77.0.111, `verify_deploy.sh`: PASS=22 FAIL=0
+- startup_volume=1, wakeword threshold=0.54, min_scores=7, shadow_mode=false
+
+### Измерения ERLE на устройстве при volume=1
+- Ch0: 20.17 dB eval / 20.87 dB steady
+- Avg4: 21.33 dB / 22.16 dB
+- После log-curve (level 1 → 42%): ожидается ~28+ dB ERLE (loopback Ch6 ~300-400 RMS)
+
+### Конфигурация (config.toml)
+```toml
+startup_volume = 1
+
+[audio.aec]
+enabled = true
+bulk_delay = 16
+step_size = 0.75
+power_leak = 0.92
+regularization = 0.02
+max_attenuation_db = 30.0
+res_enabled = true
+res_floor_db = -24.0
+res_overdrive = 1.5
+
+[wakeword]
+threshold = 0.54
+avg_threshold = 0.20
+min_scores = 7
+band_pass = true
+band_low = 200
+band_high = 4000
+gain_normalizer = false
+echo_tail_ms = 2500
+shadow_mode = false
+```
+
+### decision.tsv (`.hillclimb/decision.tsv`)
+Все 12 итераций (000–011) зафиксированы. Следующая сильная гипотеза: Avg4 multi-mic beamforming (+1 dB над Ch0).
+
+---
+
 # 23.11.2026 — Устранение спонтанной речи и испанских галлюцинаций: калибровка профиля «Холл 2м» (Revision 13)
 
 В ходе эксплуатации в помещении **«Холл»** с подключённой акустикой Bose выявлен и полностью устранён дефект бесконечной спонтанной речи колонки на испанском языке (*«Estoy aquí, pregúntame algo»* / «Я здесь, спроси меня о чём-нибудь»). Все регулировки выполнены строго через REST API `/api/v1/acoustics/*` и MCP stdio-адаптер (`scripts/mcp_acoustic_agent.py`) без единого изменения исходного кода приложения (`mini-assistant/src/*`):
