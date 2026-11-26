@@ -1,3 +1,38 @@
+# 26.11.2026 — Видимость профилей в `/acoustics`, звуковые cue-сигналы, управление громкостью и загрузка WAV (`894702d`)
+
+## Выполненные изменения (`mini-assistant` и корневой `scripts/mcp_acoustic_agent.py`)
+
+1. **Фикс same-origin браузерной аутентификации (`src/web/mod.rs`):**
+   - Исправлена проверка `same_origin`: помимо заголовка `Origin` учитываются `Sec-Fetch-Site: same-origin` и совпадение хоста `Referer` с `Host` для `GET`/`HEAD` (без изменения `401 Unauthorized` для внешних анонимных запросов без этих заголовков).
+   - Браузер на `http://<ip>:8080/acoustics#group` теперь получает сохранённые профили и библиотеку сэмплов сразу при открытии страницы (`refreshProfilesList()` вызывается при инициализации).
+2. **Звуковые сигналы готовности (`cue`), `cue_before` / `cue_after` и `ToneBeep` (`src/acoustics/jobs.rs`, `src/acoustics/evaluator.rs`, `src/web/mod.rs`):**
+   - Добавлены `CueKind` (`ready`, `ack`, `double_beep`, `tone`), генератор синусоидальных сигналов `generate_cue_pcm()` (ограничение до `-6.0 dBFS`), метод `AcousticJobRunner::play_cue()`, маршрут `POST /api/v1/acoustics/cue` и опциональные флаги `cue_before` / `cue_after` в `CreateJobDto`.
+   - `AcousticJobRunner` соблюдает лимит громкости `CalibrationLease::max_volume_pct` через `AuthManager::max_volume_pct()`.
+3. **Громкость и фоновая музыка в калибровочном API (`src/web/mod.rs`, `src/web/auth.rs`, `src/acoustics/openapi.rs`):**
+   - Добавлены `GET/POST /api/v1/acoustics/volume` (связка `0–10` с таблицей `soloist_percent_for_level` и клэмп по lease) и `GET/POST /api/v1/acoustics/reference_playback` (статус и `play`/`resume`/`pause`/`next`/`prev`/`volume` для Soloist с тем же потолком `max_volume_pct`).
+4. **Автоконвертация WAV при загрузке и точечный `evaluate` (`src/acoustics/samples.rs`, `src/acoustics/evaluator.rs`, `src/web/mod.rs`):**
+   - Добавлена опция `auto_convert: true` в `CreateSampleDto` (`normalize_wav_to_16k_mono_pcm16()` — downmix в моно + линейный ресэмплинг в `16 kHz PCM16`, включая float32 WAV); по умолчанию строгая валидация сохранена.
+   - Добавлена точечная оценка одного сэмпла `AcousticEvaluator::evaluate_single_sample()` (`sample_id` в `POST /api/v1/acoustics/evaluate`).
+5. **Web UI и MCP (`src/web/acoustic_lab.html`, `scripts/mcp_acoustic_agent.py` в обоих репо):**
+   - В `acoustic_lab.html` добавлены якорь `id="group"` и список профилей, панель громкости/сигналов/Soloist (`#playback-volume`), загрузка WAV с автоконвертацией, кнопка «Проверить KWS» на каждом сэмпле, выбор WAV-сэмпла и guided-режим (`Бип → фраза → Бип`) в Jobs, а также исправлено расхождение формата `StimulusSignal` (`type: "silence"|"chirp_sweep"|"sample"`).
+   - В `mcp_acoustic_agent.py` и OpenAPI 3.1 добавлены инструменты `play_acoustic_cue`, `prompt_and_capture_phrase`, `get_speaker_volume`, `set_speaker_volume`, `control_reference_playback`, а также параметры `auto_convert`, `cue_before`/`cue_after` и `sample_id`.
+
+## Проверки, деплой и живая верификация (`894702d`)
+
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)**:
+  - `format` PASS, `lint` PASS (`clippy -D warnings`), `rust` PASS (`279 lib + 3 bcm_attach + 9 keyword_enroll + 288 main + 8 aec_synthetic_test = 587 passed`), `vendor` PASS, `python` (`Ran 41 tests in 18.903s, OK (skipped=1)` — пропущен opt-in live test `test_live_mcp_calibration_scenario_and_gate_verification`).
+- **ARM32 релиз:** `armv7-unknown-linux-musleabihf`, `4.4M`, SHA256 `276d5353d3679fe1b452785f50f2d9ba63be4f3bd00571b76b4779f0a22e51ca`, коммит `894702d`, тег `release/2026-11-26-894702d`.
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`BUILD_INFO = 894702d3d53ef654dfa7b913e13bc660f118d658`, процесс активен без `(deleted)`, `available=152936 kB` RAM).
+- **Живые HTTP/акустические проверки на `10.77.0.111:8080`:**
+  - `GET /api/v1/acoustics/profiles` без заголовков -> `401`; с `Sec-Fetch-Site: same-origin` -> `200 OK` (возвращает все 3 профиля: 2× `Гостиная 2м Этап 9` и `Холл 2м`).
+  - `GET /api/v1/acoustics/samples?split=calibration` с `Sec-Fetch-Site: same-origin` -> `200 OK` (`43` сэмпла).
+  - `GET /api/v1/acoustics/volume` -> `level=1`, `soloist_pct=42`, `soloist_actual_pct=42`, `ducked=false`.
+  - `GET /api/v1/acoustics/reference_playback` -> `available=true`, `state=paused`, `volume=42`.
+  - `POST /api/v1/acoustics/cue` (`{"kind":"ready","volume_pct":35}`) -> `200 OK` (`played_ms=260`, `peak_amplitude=8231`, звуковой сигнал воспроизведён на динамике).
+  - `GET /api/v1/acoustics/openapi.json` -> содержит пути `/cue`, `/volume`, `/reference_playback`.
+
+---
+
 # 26.11.2026 — Фаза 6 M-AEC завершена: 2D Waterfall Web UI, 6-band ERLE, `/samples/{id}/spectrogram` и hardening деплоя (`57f86c1`)
 
 ## Выполненные изменения (`mini-assistant`)
