@@ -1,3 +1,28 @@
+# 27.11.2026 — Вариант 1 KWS DTW: суффиксное выравнивание в `rustpotter-ref` и жёсткий отбор эталонов (`e0b261a`)
+
+## Выполненные изменения (`mini-assistant`)
+
+1. **Суффиксное выравнивание скользящего окна (`vendor/rustpotter-ref/src/wakewords/comp/wakeword_comp.rs`):**
+   - `NormScratch::normalize_prefix` заменён на `normalize_suffix`: короткие шаблоны в наборе (меньше `max_mfcc_frames`) теперь выравниваются по последним фреймам окна `frames[frames.len() - num_frames..]` вместо устаревающего префикса `0..target_len`.
+   - Добавлен модульный тест `short_template_aligns_on_latest_frames_without_prefix_lag` (срабатывание по свежему концу окна без лага и отсутствие ложного триггера на устаревшем префиксе).
+2. **Обрезка, реальный SNR, отбор шаблонов и `.rpw` (`src/wakeword/enrollment.rs`):**
+   - Константа `MAX_SAMPLES` согласована с `MfccWavFileExtractor` (`48_000` сэмплов / `3.0 с` вместо `64_000` / `4.0 с`).
+   - В `trim_enrollment_bounds()` ужесточён энергетический порог (`(peak * 0.30).max(noise * 3.0).min(peak * 0.65)`), допустимая внутренняя пауза сокращена до `36` фреймов (`360 мс` — сохраняет составную паузу `250 мс` из теста), отступы уменьшены до `100/120 мс`, общий расчёт вынесен в `frame_rms_10ms()`.
+   - В `process_sample()` убран искусственный пол `trimmed_rms * 0.3`: SNR вычисляется по медиане 10-мс тихих фреймов фона вне границ `[start..end]` (или 5-му процентилю, если вне границ `< 5` фреймов). Добавлен тест `test_process_sample_rejects_stationary_background_noise_by_real_snr`.
+   - В `analyze_samples()` адаптивно расширено окно DTW матрицы до `5.max(|len_a - len_b| + 5)` (устранены ложные нули сходства при естественном разбросе темпа на `60–150 мс`), добавлена фильтрация выбросов по длительности (`< 0.55` или `> 1.50` медианы при `n >= 5`) и по акустической изоляции (`max_peer_sim` / `centrality` относительно медианы выборки), а отбор `select_best_templates` ограничен полом центральности (`>= 0.70 * mean`). Добавлен тест `test_analyze_samples_flags_duration_and_isolated_outliers`.
+   - В `compile_reference()` переданы `None, None` для `threshold` / `avg_threshold`, чтобы не зашивать жёсткие пороги внутрь `.rpw`.
+
+## Проверки, деплой и runtime на устройстве (`e0b261a`)
+
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)**: `format` PASS, `lint` PASS (`clippy -D warnings`), `rust` PASS, `vendor` PASS, `python` PASS.
+- **ARM32 релиз:** `armv7-unknown-linux-musleabihf`, `4.5M`, SHA256 `d0fcf765fde16609e3a2b6c8bbf84583d57cb99a57645c3c306e75fdf3ebcb46`, коммит `e0b261a`.
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`BUILD_INFO = e0b261a5a91c0a7385997ec4c30e9e3dc4077346`, `dirty=clean`, `available=141900 kB` RAM).
+- **Runtime конфиг на `10.77.0.111:8080` (`POST /api/v1/acoustics`, `rev=1`):** установлено `avg_threshold = 0.0` (и в `applied`, и в `saved`), сохранены `threshold = 0.48`, `min_scores = 6`, `score_mode = "max"`.
+- **Оффлайн-корпус (`kws_sweep`):** чистая модель на базе `hall_kw_01..06` (`1.90..2.00 с`) после фикса дала `hall=12/12`, `sil_fa=0`, `music_fa=0`, `meas_fa=0` при `thr=0.46..0.48`, `avg=0.0`, `min_scores=5..6` (против `neg_fa=20` на старом `keyword.rpw`).
+- **Следующий шаг:** чистое переобучение «Штучка-интеллект» пользователем на устройстве и проверка 2 минут обычной речи + живых вызовов.
+
+---
+
 # 26.11.2026 — Видимость профилей в `/acoustics`, звуковые cue-сигналы, управление громкостью и загрузка WAV (`894702d`)
 
 ## Выполненные изменения (`mini-assistant` и корневой `scripts/mcp_acoustic_agent.py`)
