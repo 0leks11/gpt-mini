@@ -1,3 +1,24 @@
+# 27.11.2026 — Защита старта Spotify Connect от ранней загрузки сети (`b454de6`)
+
+## Выполненные изменения (`mini-assistant`)
+
+1. **Поэтапная проверка сети и TLS в супервизоре (`scripts/run-supervisor.sh`):**
+   - Добавлена `network_ipv4_ready()`: проверяет одновременно наличие IPv4-адреса на `wlan0` и default gateway через `ip -4`, чтобы `wait_for_ntp()` на тёплом рестарте (когда год уже `>= 2026`) не пропускал загрузку при одном link-local `fe80::` (до 30 с ожидания сети до запуска основного цикла).
+   - Добавлена `spotify_network_ready()`: перед стартом `soloist-run.sh` в `watchdog_loop()` проверяет `network_ipv4_ready()`, `YEAR >= 2026`, DNS-резолв `nslookup apresolve.spotify.com` и HTTPS-запрос `wget --ca-certificate=/etc/ssl/certs/ca-certificates.crt -T 4 -t 1 -q -O /dev/null https://apresolve.spotify.com` (без этой проверки на предыдущем перезапуске `soloist` получал `CURL error: 6` и аннулировал OAuth-сессию).
+   - Добавлена защита от спама в `assistant.log` (флаг `soloist_wait_logged` выводит сообщение о задержке один раз за простой) и однократный OS `sync` (`soloist_token_synced`) сразу после подтверждения `logged in: yes` через `soloist-ctl status`.
+2. **Изолированные тесты супервизора (`tests/test_supervisor.py`):**
+   - Добавлен модуль `SupervisorBootReadinessTests` (с подменёнными `ip`, `nslookup`, `wget`, `date`, `ps`, `sleep`, `sync`, `soloist-ctl`), проверяющий как сценарий «год уже `2026`, но сеть/DNS/HTTPS ещё не поднялись», так и холодный старт без RTC (`year=2015`).
+
+## Проверки и деплой (`b454de6`)
+
+- **`sh -n` + `tests.test_supervisor`:** локально и в BusyBox `/bin/sh -n` на Mini синтаксис OK; 3 последовательных прогона `python3 -W error -m unittest -v tests.test_supervisor` — **OK** (`2 tests` за `~10 с` каждый).
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)** (`format`, `lint`, `rust`, `vendor`, `python`).
+- **Деплой и артефакты на GPT Mini:** коммит `b454de68ce08f3565caf4e72124acc2c262b673a`, бинарник SHA256 `b18ffd479f0e16cb62c2ba97b94d5fcb33949d75ba0c5a0e305f0e15e5deb03e`, `run-supervisor.sh` SHA256 `3cbaa0887f7271244ce79b558e488652c85fd4dc04ab5a1d4a0be9b2b519db04`.
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`available=170584 kB` RAM).
+- **Проверка на живом Mini:** `soloist-ctl status` подтверждает сохранённую сессию (`soloist: reachable`, `logged in: yes`); цепочка проверки `wlan0` IPv4 + default route + `nslookup` + `wget` с CA bundle прошла (`SPOTIFY_NET_GATE_OK`). Остаётся опциональная проверка реальным `reboot` / переподключением питания пользователем.
+
+---
+
 # 27.11.2026 — Фикс обрезки enrollment (щелчки/DC/ядро речи) и аудио/LED/UI-индикаторы записи (`9e92c8d`)
 
 ## Выполненные изменения (`mini-assistant`)
