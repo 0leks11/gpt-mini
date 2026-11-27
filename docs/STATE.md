@@ -1,3 +1,24 @@
+# 27.11.2026 — Приоритетная маршрутизация Spotify Connect на GPT Mini (`9bcbda8`)
+
+## Выполненные изменения (`mini-assistant`)
+
+1. **Приоритетный перехват активного устройства (`src/spotify/soloist.rs`, `src/spotify/web_api.rs`, `src/spotify/mod.rs`):**
+   - В `SoloistClient` добавлен метод `activate()` (`soloist-ctl activate`); `SoloistStatus::is_actually_playing()` теперь требует `self.is_active == true`, чтобы воспроизведение на MacBook/телефоне не принималось за локальный звук на динамике Mini (учтено в `MusicDucker::duck()`, поллере `main.rs` и статусе Web UI).
+   - В `SpotifyApiClient` добавлены `find_mini_device()` и `transfer_playback_to_mini()` (`PUT /v1/me/player`).
+   - В `src/spotify/mod.rs` добавлен единый helper `ensure_local_device_active()` (`soloist-ctl activate` + Web API `transfer_playback_to_mini` fallback), применяемый в голосовых командах (`spotify_play`, `spotify_next`, `spotify_previous`), в едином обработчике Web UI `handle_web_playback_action()` и в `calibration/reference_playback` (`src/web/mod.rs`). Пауза (`spotify_pause` / `/api/spotify/pause`) не перехватывает стороннее устройство.
+2. **Обновление Web UI (`src/web/mod.rs`, `src/web/dashboard.html`):**
+   - В `GET /api/v1/status` добавлены поля `spotify.reachable` и `spotify.is_active`; добавлен Owner-only маршрут `POST /api/spotify/activate`.
+   - На панели Spotify отображается реальный статус (`Активна на Mini` / `Другое устройство` / `Не подключена`) и кнопка быстрого перехвата `🔊 Переключить Spotify на GPT Mini`, когда активен внешний клиент.
+
+## Проверки и деплой (`9bcbda8`)
+
+- **`./scripts/check.sh`:** **PASS (5/5 этапов)** (`format`, `lint`, `rust`, `vendor`, `python` — включая 5 новых тестов для `activate()`, `transfer_playback_to_mini()`, `handle_spotify_tool_call` и `/api/spotify/activate`).
+- **ARM32 бинарник:** SHA256 `b4dd640dc7e080593b4985c544589acebf86eca432b6acb3d868bd01e1c19982`, `BUILD_INFO` = `9bcbda84d268c7b03e2353ea181d70dc52e17647`.
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`available=163376 kB` RAM).
+- **Живой `/api/v1/status` и `soloist-ctl status`:** `soloist: reachable`, `logged in: yes`, `active device: yes`, `spotify.reachable: true`, `spotify.is_active: true`.
+
+---
+
 # 27.11.2026 — Защита старта Spotify Connect от ранней загрузки сети (`b454de6`)
 
 ## Выполненные изменения (`mini-assistant`)
