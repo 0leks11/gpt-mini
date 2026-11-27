@@ -1,3 +1,34 @@
+# 27.11.2026 — OpenAI Realtime, `credentials.json`, веб-авторизация и переключатель Gemini ⟷ OpenAI (`7841d54`)
+
+## Выполненные изменения (`mini-assistant` + `gpt-mini`)
+
+План [2026-11-27-soft-openai-and-web-auth.md](plans/2026-11-27-soft-openai-and-web-auth.md) выполнен по Фазам 1–3 как мягкая интеграция поверх существующего контура без ломки Gemini Live, KWS, M-AEC и Spotify Connect:
+
+1. **Фаза 1 — Паритет `OpenAiRealtimeClient` (`7196a0b`):**
+   - `src/openai/realtime_client.rs`: добавлен линейный ресемплер `Upsampler16To24` (`16 кГц → 24 кГц` только для потока OpenAI), рекурсивное приведение JSON-схемы `normalize_schema_types`, выравнивание контрактов `control_home_device` (`parameters`) и `get_device_history` (`hours_ago`), очередь ходов `OpenAiSessionTurns`, прерывания (`response.cancel` + `input_audio_buffer.clear` + `on_interrupted`), `suppress_followup`, поддержка `response.audio.*` и `response.output_audio.*`, санитизация ошибок.
+   - `src/main.rs`: снято ограничение `provider == VoiceProvider::Gemini` для `tools_allowed` и `--check`.
+   - `scripts/verify_deploy.sh`: автоматический выбор проверяемого маркера рукопожатия (Gemini или OpenAI) по `provider` в `config.toml`.
+2. **Фаза 2 — Неубиваемый `:8080` и `credentials.json` (`9f49662`, `gpt-mini`: `ba04b8d`):**
+   - `src/credentials.rs`: `CredentialsStore` с атомарной записью и правами `0600`, приоритет чтения `credentials.json → config.toml → .env`, маскирование секретов `mask_secret()`, изоляция `*credentials*.json` и `credentials.json` в `.gitignore` обоих репозиториев.
+   - `src/main.rs`, `src/config.rs`, `src/web/mod.rs`: `ControlCenterServer` (`:8080`), LED, Soloist и будильники стартуют до проверки облачных ключей; ошибки входа/ключей переводят только голосовой контур в `needs_auth` / `auth_error`, сохраняя Web UI доступным.
+3. **Фаза 3 — Веб-авторизация и взаимоисключающий переключатель (`7841d54`, тег `release/2026-11-27-7841d54`):**
+   - `src/web/auth_providers.rs`, `src/web/auth.rs`, `src/web/mod.rs`: Owner-only маршруты `/api/v1/auth/status`, `/api/v1/auth/key`, `/api/v1/auth/logout`, `/api/v1/auth/openai/device/{start,poll}`, `/api/v1/auth/openai/{login,callback,complete}`, `/api/v1/auth/spotify/complete`; автообновление OpenAI OAuth `refresh_token` и гибкий парсер `interval` (число/строка) в Device Code Flow; проверка провайдера через `verify_provider_credential` до изменения `config.toml` в `POST /api/v1/voice`.
+   - `src/web/dashboard.html`: явный взаимоисключающий переключатель активного ИИ (`Кто отвечает сейчас`: `Google Gemini Live` ⟷ `OpenAI ChatGPT Voice`), карточки входа OpenAI (Device Code / PKCE / API Key), Gemini (API Key) и Spotify (`client_id` + OAuth PKCE).
+
+## Проверки и деплой (`7841d54`)
+
+- **Фаза 1 (`7196a0b`):** `./scripts/check.sh` PASS (5/5), ARM32 SHA256 `755792717b1f39afe16eca49e789d9127fc95da91906241fed715e396a5fa49b`, `./scripts/verify_deploy.sh` PASS=23 FAIL=0.
+- **Фаза 2 (`9f49662`):** `./scripts/check.sh` PASS (5/5; `621` Rust-тестов), ARM32 SHA256 `c27b1f0f25917349144d10feacfb48fdf6860b290fa4bd1133e1f064849b452438`, `./scripts/verify_deploy.sh` PASS=23 FAIL=0 (`available=151332 kB`).
+- **Фаза 3 (`7841d54`):** `./scripts/check.sh` **PASS (5/5 этапов)** (`299 lib + 3 bcm + 9 kw + 308 main + 8 integration = 627` Rust-тестов), ARM32 бинарник SHA256 `b6781bb146d16ef7090c9ac9112378217e9d08f82ba60de1ecb3c2176a64ce70`, `BUILD_INFO` = `7841d5409a7da68e23cdc83a89adff257d49dab9` (`dirty=clean`).
+- **`./scripts/verify_deploy.sh`:** **PASS=23 FAIL=0** (`available=151496 kB`, `unexpected_exits=0`, `Gemini Live setupComplete`, активен `provider = "gemini"`, `voice = "Aoede"`).
+- **Живой `:8080` на Mini (`10.77.0.111`):**
+  - `GET /api/v1/status` → `HTTP 200` (`provider: "gemini"`, `voice_runtime.status: "ready"`, маскированные статусы `auth.gemini`/`openai`/`spotify`, без утечки секретов).
+  - `GET /api/v1/auth/status` → `HTTP 401` без `Sec-Fetch-Site: same-origin` / Owner-токена и `HTTP 200` с `-H "Sec-Fetch-Site: same-origin"` (проверено через `wget` на `127.0.0.1:8080` и `curl` с Mac на `10.77.0.111:8080`).
+  - `GET /` содержит переключатель `Кто отвечает сейчас` (`tab-gemini`, `tab-openai`) и функции UI-авторизации.
+- **Открытый пункт (Фаза 4 — опционально):** живая проверка пользователем в браузере, примет ли `wss://api.openai.com/v1/realtime` OAuth-токен подписки ChatGPT (`chatgpt.tokens.use.direct`) или потребуется API Key / fallback-пайплайн на `/v1/responses`.
+
+---
+
 # 27.11.2026 — Приоритетная маршрутизация Spotify Connect на GPT Mini (`9bcbda8`)
 
 ## Выполненные изменения (`mini-assistant`)
