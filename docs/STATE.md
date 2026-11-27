@@ -1,3 +1,10 @@
+# 27.11.2026 — OpenAI GA Realtime Fix (`b669ff9`)
+
+- В `src/openai/realtime_client.rs` удалён устаревший заголовок `OpenAI-Beta: realtime=v1`, приводивший к ошибке `beta_api_shape_disabled: The Realtime Beta API is no longer supported`. Теперь клиент подключается по официальному GA-протоколу `/v1/realtime`.
+- Проверка `./scripts/check.sh` PASS (5/5), ARM32 SHA256 `479d7dda06c469228d1ce0b67d6ca1ac75d0436ecb0314919b118f387eec779e`, `./scripts/verify_deploy.sh` PASS=23 FAIL=0 (`available=151440 kB`). Тег `release/2026-11-27-b669ff9`.
+
+---
+
 # 27.11.2026 — OpenAI Realtime, `credentials.json`, веб-авторизация и переключатель Gemini ⟷ OpenAI (`7841d54`)
 
 ## Выполненные изменения (`mini-assistant` + `gpt-mini`)
